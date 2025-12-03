@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Work Tracker — Stranger Things</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <div class="logo">WW</div>
+          <div>
+            <h1>Work Wife</h1>
+          </div>
+        </div>
+      </header>
+
+      <nav class="tabs" role="tablist" aria-label="Main navigation">
+        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="log">Log</button>
+        <button class="tab-btn" data-tab="config">Config</button>
+      </nav>
+
+      <!-- Dashboard -->
+      <section id="dashboard" class="panel" role="tabpanel">
+        <div
+          style="
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+          "
+        >
+          <div style="display: flex; gap: 8px; align-items: center">
+            <label
+              for="monthSelect"
+              style="color: var(--muted); font-weight: 700"
+              >Month:</label
+            >
+            <input id="monthSelect" type="month" class="small" />
+          </div>
+          <div class="right" style="margin-left: auto; display: flex; gap: 8px">
+            <button
+              id="btnExport"
+              class="btn ghost small"
+              title="Export logs (JSON)"
+            >
+              Export JSON
+            </button>
+            <button
+              id="btnClear"
+              class="btn ghost small"
+              title="Clear all logs and config"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div class="kpis mb-6">
+          <div class="progress-card">
+            <div class="progress-top">
+              <div>
+                <div class="progress-big" id="progTitle">Monthly goal</div>
+                <div style="color: var(--muted)" id="goalSummary">
+                  0 hours required • 0 logged
+                </div>
+              </div>
+              <div style="text-align: right">
+                <div
+                  style="font-weight: 800; font-size: 1.1rem"
+                  id="percentLabel"
+                >
+                  0%
+                </div>
+                <div
+                  style="color: var(--muted); font-size: 0.85rem"
+                  id="overtimeLabel"
+                >
+                  Over/Under: 0h
+                </div>
+              </div>
+            </div>
+
+            <div class="progress-bar-wrap" aria-hidden="true">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                margin-top: 10px;
+                flex-wrap: wrap;
+                align-items: center;
+              "
+            >
+              <div style="display: flex; gap: 8px; align-items: center">
+                <div style="font-size: 0.9rem; color: var(--muted)">
+                  Showing:
+                </div>
+                <div
+                  style="
+                    background: var(--card-2);
+                    padding: 6px 8px;
+                    border-radius: 8px;
+                    font-weight: 700;
+                  "
+                  id="viewLabel"
+                >
+                  This month
+                </div>
+              </div>
+              <div class="muted-note" style="margin-left: auto">
+                Last updated: <span id="lastUpdated">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <div class="stats-grid">
+              <div class="stat">
+                <h3>WFH Days (implicit)</h3>
+                <p id="wfhUsed">
+                  Implicit hybrid days are not required to be logged.
+                </p>
+              </div>
+              <div class="stat">
+                <h3>Office Days Remaining</h3>
+                <p id="officeRemaining">0</p>
+              </div>
+              <div class="stat">
+                <h3>Total Monthly Mandatory Hours</h3>
+                <p id="monthlyGoal">0 hours</p>
+              </div>
+              <div class="stat">
+                <h3>Hours: Office vs Logged</h3>
+                <p id="splitHours">Office 0h • Logged 0h</p>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                "
+              >
+                <strong>Last 30 days — Actual vs Planned (line)</strong>
+                <small style="color: var(--muted)">SVG line chart</small>
+              </div>
+              <svg
+                class="chart-svg"
+                id="chartSVG"
+                viewBox="0 0 600 180"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              ></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="logs-card">
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 8px;
+            "
+          >
+            <strong>Recent Entries</strong>
+            <div
+              style="color: var(--muted); font-size: 0.9rem; margin-left: 6px"
+            >
+              — latest 10
+            </div>
+            <button id="viewAllBtn" class="btn ghost small right">
+              View All Logs
+            </button>
+          </div>
+
+          <div id="recentTableWrap">
+            <table id="recentTable" aria-live="polite">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Hours</th>
+                </tr>
+              </thead>
+              <tbody id="recentBody"></tbody>
+            </table>
+          </div>
+
+          <div id="allLogsArea" class="all-logs hidden" aria-hidden="true">
+            <table id="allLogsTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Hours</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="allLogsBody"></tbody>
+            </table>
+
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 10px;
+              "
+            >
+              <div style="color: var(--muted)" id="logsPagerInfo">Page 1</div>
+              <div style="display: flex; gap: 8px">
+                <button id="pagerPrev" class="btn ghost small">Prev</button>
+                <button id="pagerNext" class="btn ghost small">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Log -->
+      <section id="log" class="panel hidden" role="tabpanel" aria-hidden="true">
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <form id="logForm" class="log-form">
+            <div class="row">
+              <div class="col">
+                <label for="logDate">Date</label>
+                <input id="logDate" type="date" required />
+              </div>
+              <div class="col">
+                <label>Type</label>
+                <div class="type-row" id="typeRow">
+                  <label class="radio"
+                    ><input
+                      type="radio"
+                      name="logType"
+                      value="Office"
+                      checked
+                    />
+                    Office Day</label
+                  >
+                  <label class="radio"
+                    ><input type="radio" name="logType" value="WFH" /> WFH
+                    (optional)</label
+                  >
+                  <label class="radio"
+                    ><input type="radio" name="logType" value="Leave" /> Full
+                    Day Leave</label
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="row" id="hoursRow" style="margin-top: 8px">
+              <div class="col">
+                <label for="hoursWorked">Hours Worked</label>
+                <input
+                  id="hoursWorked"
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  max="24"
+                />
+              </div>
+              <div style="display: flex; gap: 8px; align-items: flex-end">
+                <button type="submit" class="btn">Log Entry</button>
+                <button type="button" id="btnToday" class="btn ghost">
+                  Today
+                </button>
+              </div>
+            </div>
+            <div
+              style="color: var(--muted); font-size: 0.9rem; margin-top: 16px"
+            >
+              Tip: WFH entries are optional; hybrid-day WFH are considered
+              implicitly if your weekly mandatory <em>less than</em> workweek
+              days.
+            </div>
+          </form>
+
+          <div style="margin-top: 8px; color: var(--muted); font-size: 0.9rem">
+            The line chart shows actual hours (logged) vs planned mandatory
+            hours per day for the last 30 days.
+          </div>
+        </div>
+      </section>
+
+      <!-- Config -->
+      <section
+        id="config"
+        class="panel hidden"
+        role="tabpanel"
+        aria-hidden="true"
+      >
+        <form id="configForm">
+          <div class="config-grid">
+            <div class="form-row">
+              <label for="mandatoryDays">Mandatory Office Days per Week</label>
+              <input
+                id="mandatoryDays"
+                type="number"
+                min="1"
+                max="7"
+                required
+              />
+            </div>
+
+            <div class="form-row">
+              <label for="allowedWFH"
+                >Allowed EXTRA WFH Days per Month (reduces required
+                hours)</label
+              >
+              <input id="allowedWFH" type="number" min="0" max="22" required />
+            </div>
+
+            <div class="form-row">
+              <label for="hoursPerDay">Mandatory Hours per Day</label>
+              <input
+                id="hoursPerDay"
+                type="number"
+                step="0.25"
+                min="1"
+                max="24"
+                required
+              />
+            </div>
+
+            <div class="form-row">
+              <label>Weekend Settings</label>
+              <div
+                style="
+                  display: flex;
+                  gap: 8px;
+                  flex-wrap: wrap;
+                  align-items: center;
+                "
+              >
+                <label class="radio"
+                  ><input id="satOff" type="checkbox" /> Saturday is OFF</label
+                >
+                <label class="radio"
+                  ><input id="sunOff" type="checkbox" /> Sunday is OFF</label
+                >
+                <small style="color: var(--muted); display: block; width: 100%"
+                  >Toggle whether Saturday or Sunday are considered off days.
+                  Remaining weekdays not counted as mandatory are implicit
+                  WFH.</small
+                >
+              </div>
+            </div>
+          </div>
+
+          <div
+            style="
+              margin-top: 12px;
+              display: flex;
+              gap: 12px;
+              align-items: center;
+              flex-wrap: wrap;
+            "
+          >
+            <div
+              style="
+                padding: 10px;
+                background: var(--card-2);
+                border-radius: 8px;
+              "
+            >
+              <div style="font-weight: 800" id="weeklyHoursPreview">0.0</div>
+              <div style="color: var(--muted); font-size: 0.9rem">
+                Standard Weekly Mandatory Hours
+              </div>
+            </div>
+
+            <div style="margin-left: auto; display: flex; gap: 8px">
+              <button type="submit" class="btn">Save Configuration</button>
+              <button type="button" id="btnLoadDefaults" class="btn ghost">
+                Defaults
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <footer
+        style="
+          margin-top: 18px;
+          color: var(--muted);
+          font-size: 0.82rem;
+          text-align: center;
+        "
+      >
+        Built with ❤️ — localStorage — Stranger Things theme
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
