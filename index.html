@@ -15,6 +15,12 @@
             <h1>Work Wife</h1>
           </div>
         </div>
+        <div>
+          <small class="muted-note"
+            >Local keys: <code>workTrackerConfig</code>,
+            <code>workTrackerDailyLogs</code></small
+          >
+        </div>
       </header>
 
       <nav class="tabs" role="tablist" aria-label="Main navigation">
@@ -26,22 +32,31 @@
       <!-- Dashboard -->
       <section id="dashboard" class="panel" role="tabpanel">
         <div
-          style="
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-          "
+          style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap"
         >
-          <div style="display: flex; gap: 8px; align-items: center">
-            <label
-              for="monthSelect"
-              style="color: var(--muted); font-weight: 700"
-              >Month:</label
-            >
-            <input id="monthSelect" type="month" class="small" />
+          <div
+            id="monthCarousel"
+            class="month-carousel"
+            aria-label="Month selector"
+          >
+            <button id="monthPrev" class="month-arrow" title="Previous month">
+              ‹
+            </button>
+            <div
+              id="monthPill"
+              class="month-pill"
+              tabindex="0"
+              role="button"
+              aria-pressed="false"
+            ></div>
+            <button id="monthNext" class="month-arrow" title="Next month">
+              ›
+            </button>
           </div>
+
+          <!-- hidden fallback month input -->
+          <input id="monthSelect" type="month" class="small hidden" />
+
           <div class="right" style="margin-left: auto; display: flex; gap: 8px">
             <button
               id="btnExport"
@@ -141,30 +156,28 @@
                 <p id="splitHours">Office 0h • Logged 0h</p>
               </div>
             </div>
-
-            <div class="chart-card">
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  margin-bottom: 8px;
-                "
-              >
-                <strong>Last 30 days — Actual vs Planned (line)</strong>
-                <small style="color: var(--muted)">SVG line chart</small>
-              </div>
-              <svg
-                class="chart-svg"
-                id="chartSVG"
-                viewBox="0 0 600 180"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              ></svg>
-            </div>
           </div>
         </div>
-
+        <div class="chart-card">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+            "
+          >
+            <strong>Last 30 days — Actual vs Planned (line)</strong>
+            <small style="color: var(--muted)">SVG line chart</small>
+          </div>
+          <svg
+            class="chart-svg"
+            id="chartSVG"
+            viewBox="0 0 600 180"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          ></svg>
+        </div>
         <div class="logs-card">
           <div
             style="
@@ -262,7 +275,7 @@
               </div>
             </div>
 
-            <div class="row" id="hoursRow" style="margin-top: 8px">
+            <div class="row" id="hoursRow">
               <div class="col">
                 <label for="hoursWorked">Hours Worked</label>
                 <input
@@ -280,12 +293,9 @@
                 </button>
               </div>
             </div>
-            <div
-              style="color: var(--muted); font-size: 0.9rem; margin-top: 16px"
-            >
-              Tip: WFH entries are optional; hybrid-day WFH are considered
-              implicitly if your weekly mandatory <em>less than</em> workweek
-              days.
+            <div style="color: var(--muted); font-size: 0.9rem">
+              Tip: WFH entries are optional; Leave entries reduce mandatory
+              days/hours regardless of hours typed.
             </div>
           </form>
 
@@ -400,7 +410,9 @@
           font-size: 0.82rem;
           text-align: center;
         "
-      ></footer>
+      >
+        Built by SSS(2025)
+      </footer>
     </div>
 
     <script src="app.js"></script>

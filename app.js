@@ -1,8 +1,10 @@
 /*
-  Work Tracker — Updated Leave logging behavior
-  - Leave entries are loggable (hours input remains enabled)
-  - For calculations, Leave always counts as a full-day leave (hours = 0 in storage)
-  - All other behaviors retained: implicit WFH, allowedWFH reductions, line chart, pagination
+  Work Tracker — Unique log per date + 3-month carousel (current + prev1 + prev2)
+  - Single-file localStorage keys: workTrackerConfig, workTrackerDailyLogs
+  - If adding a log for a date that already exists: confirm replace (replace keeps uniqueness)
+  - Month carousel: index 0 = current-2, 1 = current-1, 2 = current
+  - Swipe support on month pill for touch devices
+  - Rest features retained: implicit WFH, allowed WFH reduction, line chart, pagination
 */
 
 (() => {
@@ -10,6 +12,7 @@
   const KEY_LOGS = "workTrackerDailyLogs";
   const PAGE_SIZE = 10;
 
+  // storage helpers
   function saveConfig(cfg) {
     cfg.updatedAt = new Date().toISOString();
     localStorage.setItem(KEY_CONFIG, JSON.stringify(cfg));
@@ -45,11 +48,11 @@
     updatedAt: new Date().toISOString(),
   };
 
-  // Utilities
+  // utils
   function formatDateISO(d) {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear(),
+      mm = String(d.getMonth() + 1).padStart(2, "0"),
+      dd = String(d.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   }
   function parseISO(s) {
@@ -68,8 +71,8 @@
   }
 
   function weeksInMonthForDate(date) {
-    const first = startOfMonth(date);
-    const last = endOfMonth(date);
+    const first = startOfMonth(date),
+      last = endOfMonth(date);
     const dayOfWeek = (d) => (d.getDay() + 6) % 7; // 0=Mon
     const start = new Date(first);
     start.setDate(first.getDate() - dayOfWeek(first));
@@ -80,7 +83,7 @@
     while (cur <= end) {
       const weekStart = new Date(cur);
       const days = [];
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 7; i++)
         days.push(
           new Date(
             weekStart.getFullYear(),
@@ -88,7 +91,6 @@
             weekStart.getDate() + i
           )
         );
-      }
       weeks.push({
         start: new Date(weekStart),
         end: new Date(
@@ -104,7 +106,7 @@
   }
 
   function isWeekend(date, cfg) {
-    const dow = date.getDay(); // 0=Sun,6=Sat
+    const dow = date.getDay();
     if (dow === 6 && cfg.saturdayOff) return true;
     if (dow === 0 && cfg.sundayOff) return true;
     return false;
@@ -113,30 +115,33 @@
     return date.getMonth() === monthDate.getMonth() && !isWeekend(date, cfg);
   }
 
-  // CORE: monthly mandatory hours calculation
+  // core calculations
   function calculateMonthlyMandatoryHours(monthDate, config, logs) {
     const weeks = weeksInMonthForDate(monthDate);
-    const mDays = config.mandatoryDaysPerWeek;
-    const hrsPerDay = config.mandatoryHoursPerDay;
+    const mDays = config.mandatoryDaysPerWeek,
+      hrsPerDay = config.mandatoryHoursPerDay;
     let total = 0;
     for (const wk of weeks) {
       const weekdaysInWeek = wk.days.filter((d) =>
         isPlannedWeekday(d, monthDate, config)
       );
       const plannedDays = Math.min(mDays, weekdaysInWeek.length);
-      // leaves count: each logged Leave in that week (and in the month) reduces planned days by 1
-      const leavesInWeek = logs.filter((l) => {
-        if (l.type !== "Leave") return false;
-        const d = parseISO(l.date);
-        if (!d) return false;
-        return (
-          d >= wk.start && d <= wk.end && d.getMonth() === monthDate.getMonth()
-        );
-      }).length;
+      const leavesInWeek = logs.filter(
+        (l) =>
+          l.type === "Leave" &&
+          (() => {
+            const d = parseISO(l.date);
+            return (
+              d &&
+              d >= wk.start &&
+              d <= wk.end &&
+              d.getMonth() === monthDate.getMonth()
+            );
+          })()
+      ).length;
       const remainingDays = Math.max(0, plannedDays - leavesInWeek);
       total += remainingDays * hrsPerDay;
     }
-    // subtract allowed extra WFH days (reduces required hours)
     const reduced = (Number(config.allowedWFHPerMonth) || 0) * hrsPerDay;
     return Math.max(0, Number((total - reduced).toFixed(2)));
   }
@@ -155,8 +160,8 @@
   }
 
   function logsForMonth(monthDate, logs) {
-    const m = monthDate.getMonth();
-    const y = monthDate.getFullYear();
+    const m = monthDate.getMonth(),
+      y = monthDate.getFullYear();
     return logs
       .filter((l) => {
         const d = parseISO(l.date);
@@ -167,60 +172,57 @@
   }
 
   function sumHours(logs) {
-    return logs.reduce((s, l) => {
-      if (l.type === "Leave") return s;
-      return s + (Number(l.hours) || 0);
-    }, 0);
+    return logs.reduce(
+      (s, l) => (l.type === "Leave" ? s : s + (Number(l.hours) || 0)),
+      0
+    );
   }
 
   function countWFHDays(logs) {
     const set = new Set();
-    logs.forEach((l) => {
-      if (l.type === "WFH") set.add(l.date);
-    });
+    logs.forEach((l) => l.type === "WFH" && set.add(l.date));
     return set.size;
   }
   function countOfficeDays(logs) {
     const set = new Set();
-    logs.forEach((l) => {
-      if (l.type === "Office") set.add(l.date);
-    });
+    logs.forEach((l) => l.type === "Office" && set.add(l.date));
     return set.size;
   }
   function countLeaves(logs) {
     const set = new Set();
-    logs.forEach((l) => {
-      if (l.type === "Leave") set.add(l.date);
-    });
+    logs.forEach((l) => l.type === "Leave" && set.add(l.date));
     return set.size;
   }
 
   function projectedRequiredHoursUpTo(dateUpTo, config, logs) {
     const monthDate = new Date(dateUpTo.getFullYear(), dateUpTo.getMonth(), 1);
     const weeks = weeksInMonthForDate(monthDate);
-    const mDays = config.mandatoryDaysPerWeek;
-    const hrsPerDay = config.mandatoryHoursPerDay;
+    const mDays = config.mandatoryDaysPerWeek,
+      hrsPerDay = config.mandatoryHoursPerDay;
     let total = 0;
     for (const wk of weeks) {
-      const wkStart = wk.start;
-      if (wkStart > dateUpTo) break;
-      const weekdays = wk.days.filter((d) => {
-        const inMonth = d.getMonth() === monthDate.getMonth();
-        const avant = d <= dateUpTo;
-        return inMonth && avant && !isWeekend(d, config);
-      });
-      const plannedDays = Math.min(mDays, weekdays.length);
-      const leavesInWeek = logs.filter((l) => {
-        if (l.type !== "Leave") return false;
-        const d = parseISO(l.date);
-        if (!d) return false;
-        return (
-          d >= wk.start &&
-          d <= wk.end &&
+      if (wk.start > dateUpTo) break;
+      const weekdays = wk.days.filter(
+        (d) =>
           d.getMonth() === monthDate.getMonth() &&
-          d <= dateUpTo
-        );
-      }).length;
+          d <= dateUpTo &&
+          !isWeekend(d, config)
+      );
+      const plannedDays = Math.min(mDays, weekdays.length);
+      const leavesInWeek = logs.filter(
+        (l) =>
+          l.type === "Leave" &&
+          (() => {
+            const d = parseISO(l.date);
+            return (
+              d &&
+              d >= wk.start &&
+              d <= wk.end &&
+              d.getMonth() === monthDate.getMonth() &&
+              d <= dateUpTo
+            );
+          })()
+      ).length;
       const remainingDays = Math.max(0, plannedDays - leavesInWeek);
       total += remainingDays * hrsPerDay;
     }
@@ -232,7 +234,7 @@
     return Number(Math.max(0, total - reduced).toFixed(2));
   }
 
-  // UI wiring
+  // UI elements
   const tabs = document.querySelectorAll(".tab-btn");
   const sections = {
     dashboard: document.getElementById("dashboard"),
@@ -240,25 +242,6 @@
     config: document.getElementById("config"),
   };
 
-  tabs.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      tabs.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const tab = btn.dataset.tab;
-      Object.keys(sections).forEach((k) => {
-        if (k === tab) {
-          sections[k].classList.remove("hidden");
-          sections[k].removeAttribute("aria-hidden");
-        } else {
-          sections[k].classList.add("hidden");
-          sections[k].setAttribute("aria-hidden", "true");
-        }
-      });
-      if (tab === "dashboard") renderDashboard();
-    });
-  });
-
-  // DOM elements
   const elMandatoryDays = document.getElementById("mandatoryDays");
   const elAllowedWFH = document.getElementById("allowedWFH");
   const elHoursPerDay = document.getElementById("hoursPerDay");
@@ -274,7 +257,12 @@
   const typeRadios = document.querySelectorAll('input[name="logType"]');
   const btnToday = document.getElementById("btnToday");
 
-  const monthSelect = document.getElementById("monthSelect");
+  // month carousel elements
+  const monthPrev = document.getElementById("monthPrev");
+  const monthNext = document.getElementById("monthNext");
+  const monthPill = document.getElementById("monthPill");
+  const monthSelect = document.getElementById("monthSelect"); // hidden fallback
+
   const progTitle = document.getElementById("progTitle");
   const goalSummary = document.getElementById("goalSummary");
   const percentLabel = document.getElementById("percentLabel");
@@ -301,7 +289,12 @@
   const pagerNext = document.getElementById("pagerNext");
   const logsPagerInfo = document.getElementById("logsPagerInfo");
 
+  // paging state
   let currentPage = 1;
+
+  // month state: index 0 = current-2, 1 = current-1, 2 = current
+  let monthIndex = 2; // default current month
+  let baseMonthDate = new Date(); // current date used as base
 
   // init
   function init() {
@@ -313,9 +306,10 @@
     populateConfigForm(cfg);
 
     const now = new Date();
-    monthSelect.value = `${now.getFullYear()}-${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}`;
+    baseMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthIndex = 2;
+    updateMonthPill();
+
     elLogDate.value = formatDateISO(now);
     elHoursWorked.value =
       cfg.mandatoryHoursPerDay || DEFAULT_CONFIG.mandatoryHoursPerDay;
@@ -323,8 +317,19 @@
     elMandatoryDays.addEventListener("input", updateWeeklyPreview);
     elHoursPerDay.addEventListener("input", updateWeeklyPreview);
 
-    // direct listeners on radios
     typeRadios.forEach((r) => r.addEventListener("change", onTypeChange));
+    onTypeChange();
+
+    tabs.forEach((btn) => btn.addEventListener("click", onTabClick));
+    monthPrev.addEventListener("click", () => changeMonthIndex(-1));
+    monthNext.addEventListener("click", () => changeMonthIndex(1));
+    monthPill.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") changeMonthIndex(-1);
+      if (e.key === "ArrowRight") changeMonthIndex(1);
+    });
+
+    // touch swipe for monthPill
+    addSwipe(monthPill, (dir) => changeMonthIndex(dir === "left" ? 1 : -1));
 
     pagerPrev.addEventListener("click", () => {
       if (currentPage > 1) {
@@ -341,11 +346,67 @@
       }
     });
 
+    logForm.addEventListener("submit", onLogSubmit);
+
+    btnLoadDefaults &&
+      btnLoadDefaults.addEventListener("click", () =>
+        populateConfigForm(DEFAULT_CONFIG)
+      );
+    btnToday &&
+      btnToday.addEventListener(
+        "click",
+        () => (elLogDate.value = formatDateISO(new Date()))
+      );
+    btnExport.addEventListener("click", onExport);
+    btnClear.addEventListener("click", onClear);
+
     updateWeeklyPreview();
     renderDashboard();
     renderRecentLogs();
-    // ensure type behavior matches default checked
-    onTypeChange();
+  }
+
+  function addSwipe(elem, onSwipe) {
+    // simple left/right swipe detection
+    let startX = 0,
+      startTime = 0;
+    elem.addEventListener(
+      "touchstart",
+      (e) => {
+        const t = e.touches[0];
+        startX = t.clientX;
+        startTime = Date.now();
+      },
+      { passive: true }
+    );
+    elem.addEventListener(
+      "touchend",
+      (e) => {
+        const t = e.changedTouches[0];
+        const dx = t.clientX - startX;
+        const dt = Date.now() - startTime;
+        if (Math.abs(dx) > 40 && dt < 600) {
+          onSwipe(dx < 0 ? "left" : "right");
+        }
+      },
+      { passive: true }
+    );
+  }
+
+  function onTabClick(e) {
+    const btn = e.currentTarget;
+    tabs.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    Object.keys(sections).forEach((k) => {
+      if (k === tab) {
+        sections[k].classList.remove("hidden");
+        sections[k].removeAttribute("aria-hidden");
+      } else {
+        sections[k].classList.add("hidden");
+        sections[k].setAttribute("aria-hidden", "true");
+      }
+    });
+    if (tab === "dashboard") renderDashboard();
   }
 
   function populateConfigForm(cfg) {
@@ -356,6 +417,7 @@
     elSunOff.checked = !!cfg.sundayOff;
     updateWeeklyPreview();
   }
+
   function updateWeeklyPreview() {
     const d = Number(
       elMandatoryDays.value || DEFAULT_CONFIG.mandatoryDaysPerWeek
@@ -366,69 +428,11 @@
     elWeeklyPreview.textContent = `${(d * h).toFixed(2)} hours`;
   }
 
-  configForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const mandatoryDaysPerWeek = Number(elMandatoryDays.value);
-    const allowedWFHPerMonth = Number(elAllowedWFH.value);
-    const mandatoryHoursPerDay = Number(elHoursPerDay.value);
-    const saturdayOff = !!elSatOff.checked;
-    const sundayOff = !!elSunOff.checked;
-    if (
-      !Number.isInteger(mandatoryDaysPerWeek) ||
-      mandatoryDaysPerWeek < 1 ||
-      mandatoryDaysPerWeek > 7
-    ) {
-      alert(
-        "Mandatory Office Days per Week must be an integer between 1 and 7."
-      );
-      return;
-    }
-    if (
-      !Number.isFinite(allowedWFHPerMonth) ||
-      allowedWFHPerMonth < 0 ||
-      allowedWFHPerMonth > 22
-    ) {
-      alert("Allowed extra WFH Days per Month must be between 0 and 22.");
-      return;
-    }
-    if (
-      !Number.isFinite(mandatoryHoursPerDay) ||
-      mandatoryHoursPerDay <= 0 ||
-      mandatoryHoursPerDay > 24
-    ) {
-      alert("Mandatory Hours per Day must be between 1 and 24.");
-      return;
-    }
-    const cfg = {
-      mandatoryDaysPerWeek,
-      allowedWFHPerMonth,
-      mandatoryHoursPerDay,
-      saturdayOff,
-      sundayOff,
-    };
-    saveConfig(cfg);
-    alert("Configuration saved ✅");
-    renderDashboard();
-  });
-
-  btnLoadDefaults &&
-    btnLoadDefaults.addEventListener("click", () => {
-      populateConfigForm(DEFAULT_CONFIG);
-    });
-
-  btnToday &&
-    btnToday.addEventListener("click", () => {
-      elLogDate.value = formatDateISO(new Date());
-    });
-
   function onTypeChange() {
-    // Keep hours visible + enabled in all cases (user can type if they want).
-    // But Leave entries will be stored with hours=0 and used as full-day leaves in calculations.
-    // Provide helpful placeholder to indicate behavior.
     const selected = getSelectedType();
     if (selected === "Leave") {
       elHoursWorked.placeholder = "Hours ignored for Leave (full-day leave)";
-      elHoursWorked.value = ""; // clear to avoid accidental carryover
+      elHoursWorked.value = "";
     } else {
       const cfg = loadConfig() || DEFAULT_CONFIG;
       elHoursWorked.placeholder = "";
@@ -443,7 +447,7 @@
     return checked ? checked.value : "Office";
   }
 
-  logForm.addEventListener("submit", (e) => {
+  function onLogSubmit(e) {
     e.preventDefault();
     const date = elLogDate.value;
     if (!date) {
@@ -453,22 +457,51 @@
     const type = getSelectedType();
     let hours = 0;
     if (type === "Leave") {
-      // Store hours as 0 for leave entries (used by calculations as full-day leave)
       hours = 0;
     } else {
       const hv = elHoursWorked.value;
-      hours = hv === "" || hv === null ? 0 : Number(hv);
+      hours = hv === "" || hv == null ? 0 : Number(hv);
       if (!Number.isFinite(hours) || hours < 0 || hours > 24) {
         alert("Please enter valid hours (0-24).");
         return;
       }
     }
+
+    // uniqueness: check if entry exists for this date
     const logs = loadLogs();
+    const existingIndex = logs.findIndex((l) => l.date === date);
+    if (existingIndex !== -1) {
+      // prompt replace
+      if (
+        !confirm(
+          `An entry already exists for ${date} (type: ${logs[existingIndex].type}). Replace it?`
+        )
+      ) {
+        return; // abort
+      }
+      // replace existing
+      const entry = {
+        id: logs[existingIndex].id,
+        date,
+        type,
+        hours: type === "Leave" ? 0 : Number(Number(hours).toFixed(2)),
+        createdAt: new Date().toISOString(),
+      };
+      logs[existingIndex] = entry;
+      saveLogs(logs);
+      alert("Entry replaced ✅");
+      elHoursWorked.value = "";
+      onTypeChange();
+      renderDashboard();
+      renderRecentLogs();
+      return;
+    }
+
+    // add new entry
     const entry = {
       id: id(),
       date,
       type,
-      // Persist hours as 0 for Leave (ensures leaves are identifiable and consistent)
       hours: type === "Leave" ? 0 : Number(Number(hours).toFixed(2)),
       createdAt: new Date().toISOString(),
     };
@@ -476,25 +509,54 @@
     saveLogs(logs);
     alert("Logged ✅");
     elHoursWorked.value = "";
-    onTypeChange(); // refresh placeholder/default
+    onTypeChange();
     renderDashboard();
     renderRecentLogs();
-  });
+  }
+
+  function changeMonthIndex(delta) {
+    const minIndex = 0,
+      maxIndex = 2;
+    const newIndex = Math.max(minIndex, Math.min(maxIndex, monthIndex + delta));
+    if (newIndex === monthIndex) return;
+    monthIndex = newIndex;
+    updateMonthPill();
+    renderDashboard();
+  }
+
+  function updateMonthPill() {
+    // compute month date for current baseMonthDate minus (2 - monthIndex) months
+    const shift = 2 - monthIndex; // monthIndex=2 => shift=0 (current); 1 => shift=1 (prev1); 0 => shift=2 (prev2)
+    const d = new Date(
+      baseMonthDate.getFullYear(),
+      baseMonthDate.getMonth() - shift,
+      1
+    );
+    monthPill.textContent = d.toLocaleString(undefined, {
+      month: "long",
+      year: "numeric",
+    });
+    // enable/disable arrows
+    monthPrev.disabled = monthIndex <= 0;
+    monthNext.disabled = monthIndex >= 2;
+    // update hidden monthSelect fallback
+    monthSelect.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
+  }
 
   function renderDashboard() {
     const cfg = loadConfig() || DEFAULT_CONFIG;
     const allLogs = loadLogs();
-    const [selYear, selMon] = (monthSelect.value || "").split("-").map(Number);
-    let selectedMonthDate;
-    if (selYear && selMon) {
-      selectedMonthDate = new Date(selYear, selMon - 1, 1);
-    } else {
-      const now = new Date();
-      selectedMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      monthSelect.value = `${selectedMonthDate.getFullYear()}-${String(
-        selectedMonthDate.getMonth() + 1
-      ).padStart(2, "0")}`;
-    }
+
+    // compute selected month date from monthIndex
+    const shift = 2 - monthIndex;
+    const selectedMonthDate = new Date(
+      baseMonthDate.getFullYear(),
+      baseMonthDate.getMonth() - shift,
+      1
+    );
 
     const monthLogs = logsForMonth(selectedMonthDate, allLogs);
     const monthlyHoursActual = sumHours(monthLogs);
@@ -563,6 +625,7 @@
 
     renderRecentLogs();
     renderChart(selectedMonthDate, allLogs);
+
     allLogsArea.classList.add("hidden");
     allLogsArea.setAttribute("aria-hidden", "true");
     viewAllBtn.textContent = "View All Logs";
@@ -605,7 +668,6 @@
     const total = allLogs.length;
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (currentPage > pages) currentPage = pages;
-
     const start = (currentPage - 1) * PAGE_SIZE;
     const slice = allLogs.slice(start, start + PAGE_SIZE);
 
@@ -666,9 +728,22 @@
     }
   });
 
-  monthSelect.addEventListener("change", () => renderDashboard());
+  monthSelect.addEventListener("change", () => {
+    // fallback: set monthIndex based on selected month relative to baseMonthDate (clamped to last 2 months)
+    const [y, m] = (monthSelect.value || "").split("-").map(Number);
+    if (!y || !m) return;
+    const sel = new Date(y, m - 1, 1);
+    const diffMonths =
+      (baseMonthDate.getFullYear() - sel.getFullYear()) * 12 +
+      (baseMonthDate.getMonth() - sel.getMonth());
+    // diffMonths: 0 = same month, 1 = previous month, 2 = two months ago, etc.
+    const idx = 2 - Math.max(0, Math.min(2, diffMonths));
+    monthIndex = idx;
+    updateMonthPill();
+    renderDashboard();
+  });
 
-  // Chart: line graph for last 30 days
+  // Chart: line graph for last 30 days (same as previous)
   function renderChart(selectedMonthDate, allLogs) {
     const now = new Date();
     const isCurrentMonthView =
@@ -699,11 +774,12 @@
       }
     }
     const actualMap = {};
-    allLogs.forEach((l) => {
-      actualMap[l.date] =
-        (actualMap[l.date] || 0) +
-        (l.type === "Leave" ? 0 : Number(l.hours || 0));
-    });
+    allLogs.forEach(
+      (l) =>
+        (actualMap[l.date] =
+          (actualMap[l.date] || 0) +
+          (l.type === "Leave" ? 0 : Number(l.hours || 0)))
+    );
 
     const plannedArr = days.map((d) => plannedMap[formatDateISO(d)] || 0);
     const actualArr = days.map((d) => actualMap[formatDateISO(d)] || 0);
@@ -716,7 +792,6 @@
       padT = 12,
       padB = 28;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-
     const maxVal = Math.max(...plannedArr, ...actualArr, 8);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
@@ -734,7 +809,6 @@
       line.setAttribute("stroke", "rgba(255,255,255,0.06)");
       line.setAttribute("stroke-width", "1");
       svg.appendChild(line);
-
       const val = (maxVal * (1 - i / gridCount)).toFixed(0);
       const text = document.createElementNS(
         "http://www.w3.org/2000/svg",
@@ -860,9 +934,9 @@
     svg.appendChild(legendAcText);
   }
 
-  btnExport.addEventListener("click", () => {
-    const logs = loadLogs();
-    const cfg = loadConfig();
+  function onExport() {
+    const logs = loadLogs(),
+      cfg = loadConfig();
     const payload = { config: cfg, logs, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
@@ -875,9 +949,9 @@
       .slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  });
+  }
 
-  btnClear.addEventListener("click", () => {
+  function onClear() {
     if (
       !confirm(
         "Clear all stored configuration and logs? This cannot be undone."
@@ -888,11 +962,11 @@
     localStorage.removeItem(KEY_LOGS);
     alert("Cleared. Reloading with defaults.");
     location.reload();
-  });
+  }
 
   // boot
   init();
 
-  // expose minimal API
+  // expose minimal API for debugging
   window._workTracker = { loadConfig, loadLogs, saveConfig, saveLogs };
 })();
