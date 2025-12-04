@@ -351,10 +351,6 @@ label {
 .right {
   margin-left: auto;
 }
-/* ============================================
-   WORK TRACKER — STRANGER THINGS EDITION
-   Dark 80s Horror Theme
-   ============================================ */
 
 :root {
   --bg: #0a0a0a;
@@ -457,8 +453,6 @@ p.lead {
   padding: 16px;
   box-shadow: var(--shadow-blue);
 }
-/* KPI etc: same as before (omitted here for brevity) */
-/* ... (keep the same CSS content from the previous Stranger Things theme) ... */
 
 /* Month carousel: new */
 .month-carousel {
