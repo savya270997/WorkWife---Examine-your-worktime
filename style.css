@@ -240,6 +240,7 @@ td {
 
 th {
   color: var(--muted);
+  text-align: left;
 }
 
 /* TYPE LABELS – Stranger Things style --------------------------*/
