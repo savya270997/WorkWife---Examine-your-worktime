@@ -47,9 +47,10 @@ body {
 header {
   display: flex;
   gap: 14px;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-bottom: 18px;
+  text-align: center;
 }
 
 .brand {
@@ -225,22 +226,103 @@ p.lead {
   background: var(--card);
   box-shadow: var(--shadow-blue);
 }
+/* ---------- Existing style.css content retained above (do not remove) ---------- */
 
-table {
+/* Add / replace these styles to support unified logs table, pills and spacing */
+
+/* Table */
+#logsTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.94rem;
+  margin-top: 6px;
+  background: transparent;
+  color: var(--text);
 }
-
-th,
-td {
-  padding: 10px;
-  border-bottom: 1px solid var(--soft);
-}
-
-th {
-  color: var(--muted);
+#logsTable thead th {
   text-align: left;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+#logsTable tbody td {
+  padding: 10px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  font-size: 0.95rem;
+}
+
+/* spacing: ensure at least 8px gaps in rows/elements */
+.log-row,
+.time-col {
+  gap: 8px;
+}
+#hoursRow {
+  gap: 8px;
+  padding: 8px 0;
+}
+
+/* Type pill styles */
+.type-pill {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: #08121a;
+}
+.pill-office {
+  background: #34d399;
+  color: #032014;
+} /* green */
+.pill-leave {
+  background: #fb7185;
+  color: #2b0a0f;
+} /* red */
+.pill-wfh {
+  background: #60a5fa;
+  color: #05243a;
+} /* blue */
+
+/* Action buttons grouping */
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.table-actions .btn {
+  padding: 6px 8px;
+  font-size: 0.86rem;
+}
+
+/* Small responsiveness */
+@media (max-width: 720px) {
+  #logsTable thead th:nth-child(3), /* Out */
+  #logsTable thead th:nth-child(4)  /* Total Hours */ {
+    display: table-cell;
+  }
+  #logsTable tbody td {
+    padding: 8px 8px;
+    font-size: 0.92rem;
+  }
+  .log-row {
+    flex-direction: column;
+  }
+  .time-col {
+    width: 100%;
+  }
+}
+
+/* subtle hover for table rows */
+#logsTable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+/* pager buttons */
+#pagerPrev[disabled],
+#pagerNext[disabled] {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* TYPE LABELS – Stranger Things style --------------------------*/
@@ -498,4 +580,105 @@ p.lead {
 /* make hidden helper class */
 .hidden {
   display: none !important;
+}
+/* Time input wrapper styles */
+.time-input-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.01)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 10px;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.35);
+  min-width: 170px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.06s;
+  user-select: none;
+  backdrop-filter: blur(4px);
+}
+
+.time-input-wrapper:focus-within {
+  border-color: var(--accent, #e50914);
+  box-shadow: 0 8px 24px rgba(229, 9, 20, 0.16), 0 0 8px rgba(229, 9, 20, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Clock icon (left) */
+.time-input-wrapper::before {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.95;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
+/* Time input base styles */
+.time-input-wrapper input[type="time"] {
+  border: none;
+  background: transparent;
+  color: var(--text, #fff);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 4px 6px;
+  min-width: 86px;
+  outline: none;
+}
+
+/* ── Log row spacing & cal-hours styling ── */
+.log-row {
+  gap: 8px;
+}
+.time-col {
+  min-width: 130px;
+}
+.cal-hours {
+  margin-top: 4px;
+  gap: 8px;
+}
+
+/* Ensure consistent 8px spacing for grid-based log rows */
+#hoursRow {
+  gap: 8px;
+  padding: 8px 0;
+}
+
+/* Responsive: stack time inputs on small screens */
+@media (max-width: 720px) {
+  .log-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .time-col {
+    width: 100%;
+  }
+  .cal-hours {
+    justify-content: flex-start;
+  }
+}
+
+/* Chart styling (smoothed lines, subtle shadow) */
+#chartSVG {
+  width: 100%;
+  height: 220px;
+  display: block;
+}
+#chartSVG path {
+  shape-rendering: geometricPrecision;
+}
+.type-pill {
+  font-weight: 700;
+}
+
+/* color variables fallback for Stranger Things vibe */
+:root {
+  --accent: #e31b23; /* red (actual) */
+  --accent-2: #60a5fa; /* blue (planned) */
 }

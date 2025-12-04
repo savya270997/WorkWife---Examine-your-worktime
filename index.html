@@ -173,68 +173,38 @@
             aria-hidden="true"
           ></svg>
         </div>
-        <div class="logs-card">
-          <div
-            style="
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-bottom: 8px;
-            "
-          >
-            <strong>Recent Entries</strong>
-            <div
-              style="color: var(--muted); font-size: 0.9rem; margin-left: 6px"
-            >
-              — latest 10
-            </div>
-            <button id="viewAllBtn" class="btn ghost small right">
-              View All Logs
-            </button>
-          </div>
+        <div class="logs-card" style="margin-top:18px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <strong>All Logs</strong>
+          <div style="color:var(--muted);font-size:0.9rem;margin-left:6px">Sorted by date (newest first)</div>
+        </div>
 
-          <div id="recentTableWrap">
-            <table id="recentTable" aria-live="polite">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Hours</th>
-                </tr>
-              </thead>
-              <tbody id="recentBody"></tbody>
-            </table>
-          </div>
+        <div id="logsTableWrap">
+          <table id="logsTable" aria-live="polite">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>In</th>
+                <th>Out</th>
+                <th>Total Hours</th>
+                <th>Type</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="logsBody"></tbody>
+          </table>
+        </div>
 
-          <div id="allLogsArea" class="all-logs hidden" aria-hidden="true">
-            <table id="allLogsTable">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Hours</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="allLogsBody"></tbody>
-            </table>
-
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-top: 10px;
-              "
-            >
-              <div style="color: var(--muted)" id="logsPagerInfo">Page 1</div>
-              <div style="display: flex; gap: 8px">
-                <button id="pagerPrev" class="btn ghost small">Prev</button>
-                <button id="pagerNext" class="btn ghost small">Next</button>
-              </div>
-            </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+          <div style="color:var(--muted)" id="logsPagerInfo">Page 1</div>
+          <div style="display:flex;gap:8px">
+            <button id="pagerPrev" class="btn ghost small">Prev</button>
+            <button id="pagerNext" class="btn ghost small">Next</button>
           </div>
         </div>
+      </div>
+
+    </section>
       </section>
 
       <!-- Log -->
@@ -270,27 +240,59 @@
               </div>
             </div>
 
-            <div class="row" id="hoursRow">
-              <div class="col">
-                <label for="hoursWorked">Hours Worked</label>
-                <input
-                  id="hoursWorked"
-                  type="number"
-                  step="0.25"
-                  min="0"
-                  max="24"
-                />
-              </div>
-              <div style="display: flex; gap: 8px; align-items: flex-end">
-                <button type="submit" class="btn">Log Entry</button>
-                <button type="button" id="btnToday" class="btn ghost">
-                  Today
-                </button>
+            <div class="row" id="hoursRow" style="padding: 8px 0; gap: 8px">
+              <div class="col" style="grid-column: 1/-1">
+                <!-- single-row: In / Out / Actions -->
+                <div
+                  class="log-row"
+                  style="display: flex; align-items: center; gap: 8px"
+                >
+                  <div
+                    class="time-col"
+                    style="display: flex; flex-direction: column; gap: 6px"
+                  >
+                    <label class="time-input-label" for="inTime">In Time</label>
+                    <div class="time-input-wrapper">
+                      <input id="inTime" type="time" />
+                    </div>
+                  </div>
+
+                  <div
+                    class="time-col"
+                    style="display: flex; flex-direction: column; gap: 6px"
+                  >
+                    <label class="time-input-label" for="outTime"
+                      >Out Time</label
+                    >
+                    <div class="time-input-wrapper">
+                      <input id="outTime" type="time" />
+                    </div>
+                  </div>
+
+                  <div
+                    style="
+                      margin-left: auto;
+                      display: flex;
+                      gap: 8px;
+                      align-items: end;
+                    "
+                  >
+                    <button type="submit" class="btn">Log Entry</button>
+                    <button type="button" id="btnToday" class="btn ghost">
+                      Today
+                    </button>
+                  </div>
+                </div>
+
+                <!-- spacing (8px) -->
+                <div style="height: 8px"></div>
               </div>
             </div>
+
             <div style="color: var(--muted); font-size: 0.9rem">
-              Tip: WFH entries are optional; Leave entries reduce mandatory
-              days/hours regardless of hours typed.
+              Tip: Enter In/Out times (HH:MM) to auto-calc Hours — you can edit
+              Hours manually afterwards. Full-day Leave always stores hours = 0
+              (but times can still be saved).
             </div>
           </form>
 
