@@ -976,7 +976,7 @@
 
     if (leaveAdviceEl) {
       if (leaveAdvice.leavesThisWeekCount > 0) {
-        leaveAdviceEl.innerHTML = `<strong>Heads-up:</strong> You took ${leaveAdvice.leavesThisWeekCount} leave(s) this week. Try to add ~${leaveAdvice.suggestedMakeupPerWeek} office day(s) per remaining week to meet the monthly RTO requirement.`;
+        leaveAdviceEl.innerHTML = `<strong>Heads-up:</strong> You took ${leaveAdvice.leavesThisWeekCount} leave(s) this week. Try to add ${leaveAdvice.leavesThisWeekCount} + ${leaveAdvice.suggestedMakeupPerWeek} office day(s) per remaining week to meet the monthly RTO requirement.`;
       } else {
         leaveAdviceEl.innerHTML = `<strong>All set:</strong> No leaves this week — you're on track.`;
       }
