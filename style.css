@@ -59,18 +59,9 @@ header {
   gap: 14px;
 }
 
-.logo {
+.logo img {
   width: 52px;
   height: 52px;
-  border-radius: 10px;
-  background: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  color: #0a0a0a;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
-  box-shadow: var(--shadow-red);
 }
 
 h1 {
@@ -487,6 +478,7 @@ header {
   align-items: center;
   gap: 14px;
 }
+/*
 .logo {
   width: 52px;
   height: 52px;
@@ -499,7 +491,7 @@ header {
   color: #0a0a0a;
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
   box-shadow: var(--shadow-red);
-}
+}*/
 h1 {
   margin: 0;
   font-size: 1.25rem;
