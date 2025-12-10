@@ -70,6 +70,7 @@
           </div>
         </div>
 
+
         <div class="kpis mb-6">
           <div class="progress-card">
             <div class="progress-top">
@@ -140,8 +141,9 @@
               </div>
               <div class="stat">
                 <h3>Office Days Remaining</h3>
-                <p id="officeRemaining">0</p>
-              </div>
+                <p>
+    <div id="makeupNeeded">No makeup needed</div></p>
+              </div>  
               <div class="stat">
                 <h3>Total Monthly Mandatory Hours</h3>
                 <p id="monthlyGoal">0 hours</p>
@@ -173,6 +175,38 @@
             aria-hidden="true"
           ></svg>
         </div>
+                <!-- BEGIN: Leave stats & leave chart (paste into Dashboard) -->
+<div class="leave-stats-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">
+  <div class="stat-card">
+    <div class="stat-title">Leaves This Week</div>
+    <div id="leavesThisWeek" class="stat-value">0 leave(s)</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Leaves This Month</div>
+    <div id="leavesThisMonth" class="stat-value">0 leave(s)</div>
+  </div>
+
+  <div class="stat-card" style="flex:1 1 320px;">
+    <div class="stat-title">Make-up Recommendation</div>
+    <div id="makeupNeeded" class="stat-value">No makeup needed</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">
+  <div class="progress-card" style="flex:1 1 520px; min-width:260px;">
+    <div style="font-weight:700;margin-bottom:6px">Hours — Actual vs Planned</div>
+    <svg id="chartSVG" width="100%" height="220" aria-hidden="false"></svg>
+  </div>
+
+  <div class="progress-card" style="min-width:220px;">
+    <div style="font-weight:700;margin-bottom:6px">Weekly Leaves (this month)</div>
+    <svg id="chartLeaveSVG" width="100%" height="140" aria-hidden="false"></svg>
+  </div>
+</div>
+
+<div style="margin-top:8px;color:var(--muted);font-size:0.95rem" id="leaveAdvice"> </div>
+<!-- END -->
         <div class="logs-card" style="margin-top:18px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <strong>All Logs</strong>

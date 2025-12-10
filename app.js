@@ -1,11 +1,17 @@
-/* app.js — corrected full file
-   Overwrite /mnt/data/app.js with this content (no fragments)
+/* app.js — full file with updated leave-policy and advice
+   Overwrite /mnt/data/app.js with this content
 */
 
 (() => {
   const KEY_CONFIG = "workTrackerConfig";
   const KEY_LOGS = "workTrackerDailyLogs";
   const PAGE_SIZE = 10;
+
+  // === POLICY TWEAKS (adjust these constants to change behavior) ===
+  // If mandatoryDaysPerWeek >= FULL_WFO_THRESHOLD, grant FREE_LEAVES_PER_WEEK free leaves per week
+  const FULL_WFO_THRESHOLD = 5; // if user has 5-day WFO, apply the cushion below
+  const FREE_LEAVES_PER_WEEK_FOR_FULL_WFO = 1; // number of leaves per week that won't add to monthly makeup (adjustable)
+  // =================================================================
 
   // --- storage helpers
   function saveConfig(cfg) {
@@ -47,6 +53,7 @@
   // --- utilities
   const pad = (n) => String(n).padStart(2, "0");
   function formatDateISO(d) {
+    if (!(d instanceof Date)) d = new Date(d);
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   function parseISO(s) {
@@ -86,7 +93,7 @@
   function weeksInMonthForDate(date) {
     const first = startOfMonth(date),
       last = endOfMonth(date);
-    const dayIdx = (d) => (d.getDay() + 6) % 7;
+    const dayIdx = (d) => (d.getDay() + 6) % 7; // monday-first
     const start = new Date(first);
     start.setDate(first.getDate() - dayIdx(first));
     const end = new Date(last);
@@ -234,6 +241,107 @@
     return Number(Math.max(0, total - reduced).toFixed(2));
   }
 
+  // --- leave-policy helpers & analytics (NEW logic as per your description)
+  function weeklyLeaveSummary(monthDate, logs, cfg) {
+    const weeks = weeksInMonthForDate(monthDate);
+    const summary = weeks.map((wk) => {
+      const leaveDays = logs
+        .filter(
+          (l) =>
+            l.type === "Leave" &&
+            (() => {
+              const d = parseISO(l.date);
+              return (
+                d &&
+                d >= wk.start &&
+                d <= wk.end &&
+                d.getMonth() === monthDate.getMonth()
+              );
+            })()
+        )
+        .map((l) => l.date);
+      const unique = Array.from(new Set(leaveDays));
+      return {
+        start: wk.start,
+        end: wk.end,
+        leaveCount: unique.length,
+        leaveDates: unique,
+      };
+    });
+    const totalLeaves = summary.reduce((s, w) => s + w.leaveCount, 0);
+    return { summary, totalLeaves };
+  }
+
+  // compute leave advice: this function implements the policy explained above:
+  // - plannedOfficeDays: monthly target (fixed)
+  // - officeLogged: days logged as Office
+  // - leavesCount: leave days in month
+  // - leaves do NOT automatically reduce monthly target; instead they create a deficit that should be made up in remaining weeks
+  // - a small weekly cushion for full-WFO employees can be configured via constants above
+  function computeLeaveAdviceForMonth(monthDate, cfg, logs) {
+    const plannedOfficeDays = calculatePlannedOfficeDays(monthDate, cfg);
+    const monthLogs = logsForMonth(monthDate, logs);
+    const leavesCount = countLeaves(monthLogs);
+    const officeLogged = countOfficeDays(monthLogs);
+
+    // remaining RTO days needed to reach the monthly plannedOfficeDays
+    // DEFAULT: leaves do NOT reduce the monthly target — they are a deficit to make up
+    let remainingRTO = Math.max(0, plannedOfficeDays - officeLogged);
+
+    // compute allowed free leaves based on weekly cushion for FULL_WFO_THRESHOLD users
+    let allowedFreeLeavesMonth = 0;
+    if ((cfg.mandatoryDaysPerWeek || 0) >= FULL_WFO_THRESHOLD) {
+      // number of weeks remaining in month from today
+      const weeks = weeksInMonthForDate(monthDate);
+      const today = new Date();
+      const remainingWeeks = weeks.filter((w) => w.end >= today).length || 1;
+      allowedFreeLeavesMonth =
+        FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * remainingWeeks;
+      // clamp: cannot exceed actual leaves
+      allowedFreeLeavesMonth = Math.min(allowedFreeLeavesMonth, leavesCount);
+      // reduce the remaining RTO by allowed free leaves (they don't require makeup)
+      remainingRTO = Math.max(0, remainingRTO - allowedFreeLeavesMonth);
+    }
+
+    // For weekly-level feedback: compute leaves taken this week
+    const today = new Date();
+    const weeksAll = weeksInMonthForDate(monthDate);
+    const thisWeek =
+      weeksAll.find((w) => today >= w.start && today <= w.end) || weeksAll[0];
+    const leavesThisWeekCount = monthLogs
+      .filter(
+        (l) =>
+          l.type === "Leave" &&
+          (() => {
+            const d = parseISO(l.date);
+            return d && d >= thisWeek.start && d <= thisWeek.end;
+          })()
+      )
+      .map((l) => l.date);
+    const leavesThisWeekUnique = Array.from(
+      new Set(leavesThisWeekCount)
+    ).length;
+
+    // compute remaining weeks to offer makeup suggestions
+    const remainingWeeks = weeksAll.filter((w) => w.end >= today);
+    const remainingWeeksCount = remainingWeeks.length || 1;
+    const suggestedMakeupPerWeek =
+      remainingRTO > 0 ? Math.ceil(remainingRTO / remainingWeeksCount) : 0;
+
+    return {
+      plannedOfficeDays,
+      leavesCount,
+      officeLogged,
+      remainingRTO,
+      allowedFreeLeavesMonth,
+      leavesThisWeekCount: leavesThisWeekUnique,
+      suggestedMakeupPerWeek,
+      remainingWeeksCount,
+      thisWeekStart: thisWeek.start,
+      thisWeekEnd: thisWeek.end,
+    };
+  }
+
   // --- DOM refs
   const tabs = document.querySelectorAll(".tab-btn");
   const sections = {
@@ -286,6 +394,11 @@
   const monthlyGoal = document.getElementById("monthlyGoal");
   const splitHours = document.getElementById("splitHours");
   const chartSVG = document.getElementById("chartSVG");
+  const chartLeaveSVG = document.getElementById("chartLeaveSVG"); // optional
+  const leavesThisWeekEl = document.getElementById("leavesThisWeek");
+  const leavesThisMonthEl = document.getElementById("leavesThisMonth");
+  const makeupNeededEl = document.getElementById("makeupNeeded");
+  const leaveAdviceEl = document.getElementById("leaveAdvice");
 
   // state
   let currentPage = 1;
@@ -472,7 +585,17 @@
   }
 
   function onTypeChange() {
-    // no specific UI toggle now; future: hide time inputs when Leave selected
+    const sel = getSelectedType();
+    if (sel === "Leave") {
+      if (elInTime) elInTime.value = "";
+      if (elOutTime) elOutTime.value = "";
+      if (elInTime) elInTime.disabled = true;
+      if (elOutTime) elOutTime.disabled = true;
+      if (elCalHours) elCalHours.textContent = "0.00 h";
+    } else {
+      if (elInTime) elInTime.disabled = false;
+      if (elOutTime) elOutTime.disabled = false;
+    }
   }
 
   function onTimeInputChange() {
@@ -497,6 +620,11 @@
     }
     const hours = (outDt.getTime() - inDt.getTime()) / 3600000;
     if (elCalHours) elCalHours.textContent = `${Number(hours.toFixed(2))} h`;
+  }
+
+  function getSelectedType() {
+    const c = document.querySelector('input[name="logType"]:checked');
+    return c ? c.value : "Office";
   }
 
   function onLogSubmit(e) {
@@ -589,11 +717,6 @@
     renderLogsTable();
   }
 
-  function getSelectedType() {
-    const c = document.querySelector('input[name="logType"]:checked');
-    return c ? c.value : "Office";
-  }
-
   function changeMonthIndex(delta) {
     const minIndex = 0,
       maxIndex = 2;
@@ -650,7 +773,6 @@
 
       const tdType = document.createElement("td");
       const pill = document.createElement("span");
-      // build pill class safely (no inline multi-line string)
       const pillClass =
         l.type === "Office"
           ? "pill-office"
@@ -841,12 +963,36 @@
       overtimeLabel.textContent =
         ot >= 0 ? `Overtime: +${ot}h` : `Undertime: ${ot}h`;
 
+    // leave analytics & advice
+    const leaveAdvice = computeLeaveAdviceForMonth(
+      selectedMonthDate,
+      cfg,
+      allLogs
+    );
+    if (leavesThisMonthEl)
+      leavesThisMonthEl.textContent = `${leaveAdvice.leavesCount} leave(s) this month`;
+    if (leavesThisWeekEl)
+      leavesThisWeekEl.textContent = `${leaveAdvice.leavesThisWeekCount} leave(s) this week`;
+    const makeupText =
+      leaveAdvice.remainingRTO > 0
+        ? `${leaveAdvice.remainingRTO} RTO day(s) left to schedule. Suggest ~${leaveAdvice.suggestedMakeupPerWeek} day(s)/week across next ${leaveAdvice.remainingWeeksCount} week(s).`
+        : "No makeup needed — you have met RTO days for the month!";
+    if (makeupNeededEl) makeupNeededEl.textContent = makeupText;
+
+    if (leaveAdviceEl) {
+      if (leaveAdvice.leavesThisWeekCount > 0) {
+        leaveAdviceEl.innerHTML = `<strong>Heads-up:</strong> You took ${leaveAdvice.leavesThisWeekCount} leave(s) this week. Try to add ~${leaveAdvice.suggestedMakeupPerWeek} office day(s) per remaining week to meet the monthly RTO requirement.`;
+      } else {
+        leaveAdviceEl.innerHTML = `<strong>All set:</strong> No leaves this week — you're on track.`;
+      }
+    }
+
     renderChart(selectedMonthDate, allLogs);
+    renderLeaveChart(selectedMonthDate, allLogs);
   }
 
-  // --- Smoothed chart renderer (replace previous renderChart)
+  // --- Smoothed chart renderer (hours)
   function renderChart(selectedMonthDate, allLogs) {
-    // last 30 days ending at end of selected month (or today if current month)
     const now = new Date();
     const isCurrentMonthView =
       selectedMonthDate.getFullYear() === now.getFullYear() &&
@@ -862,7 +1008,6 @@
         )
       );
 
-    // build plannedMap (per-day planned hours) using your existing logic
     const cfg = loadConfig() || DEFAULT_CONFIG;
     const plannedMap = {};
     const weeks = weeksInMonthForDate(selectedMonthDate);
@@ -877,7 +1022,6 @@
       }
     }
 
-    // aggregate actual hours per day
     const actualMap = {};
     const all = loadLogs();
     all.forEach((l) => {
@@ -889,7 +1033,6 @@
     const plannedArr = days.map((d) => plannedMap[formatDateISO(d)] || 0);
     const actualArr = days.map((d) => actualMap[formatDateISO(d)] || 0);
 
-    // SVG sizing
     const svg = chartSVG;
     if (!svg) return;
     const W = Math.max(520, svg.clientWidth || 600);
@@ -900,17 +1043,14 @@
       padB = 34;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
-    // clear
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-    // scales
     const maxVal = Math.max(8, ...plannedArr, ...actualArr);
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
     const xFor = (i) => padL + (i / (days.length - 1)) * innerW;
     const yFor = (v) => padT + (1 - v / maxVal) * innerH;
 
-    // grid lines (subtle)
     const gridCount = 4;
     for (let i = 0; i <= gridCount; i++) {
       const y = padT + (innerH * i) / gridCount;
@@ -925,7 +1065,6 @@
       line.setAttribute("stroke", "rgba(255,255,255,0.06)");
       line.setAttribute("stroke-width", "1");
       svg.appendChild(line);
-      // left axis labels
       const val = Math.round((1 - i / gridCount) * maxVal);
       const lbl = document.createElementNS(
         "http://www.w3.org/2000/svg",
@@ -940,7 +1079,6 @@
       svg.appendChild(lbl);
     }
 
-    // X axis tick labels (sparse)
     for (let i = 0; i < days.length; i += 6) {
       const tx = document.createElementNS("http://www.w3.org/2000/svg", "text");
       tx.setAttribute("x", xFor(i));
@@ -952,7 +1090,6 @@
       svg.appendChild(tx);
     }
 
-    // build points arrays
     const ptsPlanned = plannedArr.map((v, i) => ({
       x: xFor(i),
       y: yFor(v),
@@ -966,28 +1103,22 @@
       i,
     }));
 
-    // helper: create smoothed path from points using Catmull-Rom -> bezier conversion
     function pointsToSmoothPath(points) {
       if (!points.length) return "";
       if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-      // build coordinates array for catmull function: [x,y,x,y,...]
       const coord = [];
       points.forEach((p) => {
         coord.push(p.x);
         coord.push(p.y);
       });
-      const beziers = catmullRom2bezier(coord, false, 0.2); // tighter smoothing with alpha ~= 0.2
-      // beziers is array of segments with [x1,y1,x2,y2,x,y] sequences as string
-      // start move to first point
+      const beziers = catmullRom2bezier(coord, false, 0.2);
       let d = `M ${points[0].x} ${points[0].y} `;
       beziers.forEach((seg) => {
-        // seg is array of numbers [x1,y1,x2,y2,x3,y3]
         d += `C ${seg[0]} ${seg[1]}, ${seg[2]} ${seg[3]}, ${seg[4]} ${seg[5]} `;
       });
       return d;
     }
 
-    // planned: dashed, thinner
     const plannedPathD = pointsToSmoothPath(ptsPlanned);
     if (plannedPathD) {
       const pPath = document.createElementNS(
@@ -996,17 +1127,15 @@
       );
       pPath.setAttribute("d", plannedPathD);
       pPath.setAttribute("fill", "none");
-      pPath.setAttribute("stroke", "var(--accent-2, #e34d56)"); // planned color (use CSS var)
+      pPath.setAttribute("stroke", "var(--accent-2, #60a5fa)");
       pPath.setAttribute("stroke-width", "2");
       pPath.setAttribute("stroke-dasharray", "6 6");
       pPath.setAttribute("stroke-linecap", "round");
       svg.appendChild(pPath);
     }
 
-    // actual: solid, thicker, subtle glow
     const actualPathD = pointsToSmoothPath(ptsActual);
     if (actualPathD) {
-      // subtle drop shadow (duplicate thicker translucent path)
       const shadow = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "path"
@@ -1025,14 +1154,13 @@
       );
       aPath.setAttribute("d", actualPathD);
       aPath.setAttribute("fill", "none");
-      aPath.setAttribute("stroke", "var(--accent, #e31b23)"); // actual color (use CSS var)
+      aPath.setAttribute("stroke", "var(--accent, #e31b23)");
       aPath.setAttribute("stroke-width", "2.8");
       aPath.setAttribute("stroke-linecap", "round");
       aPath.setAttribute("stroke-linejoin", "round");
       svg.appendChild(aPath);
     }
 
-    // markers: small circles on actual points (only when value > 0)
     ptsActual.forEach((p) => {
       if (!p.v || p.v <= 0) return;
       const c = document.createElementNS(
@@ -1048,7 +1176,6 @@
       svg.appendChild(c);
     });
 
-    // small legend top-left
     const legendX = padL + 6,
       legendY = padT + 6;
     const l1 = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -1081,7 +1208,6 @@
     l2t.textContent = "Planned";
     svg.appendChild(l2t);
 
-    // note: small border around chart (like your reference)
     const border = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "rect"
@@ -1096,32 +1222,173 @@
     svg.appendChild(border);
   }
 
+  // --- Leave bar-chart renderer (weekly)
+  function renderLeaveChart(selectedMonthDate, allLogs) {
+    const svg = chartLeaveSVG;
+    if (!svg) return;
+    const monthLogs = loadLogs().filter((l) => {
+      const d = parseISO(l.date);
+      if (!d) return false;
+      return (
+        d.getFullYear() === selectedMonthDate.getFullYear() &&
+        d.getMonth() === selectedMonthDate.getMonth()
+      );
+    });
+    const weeks = weeksInMonthForDate(selectedMonthDate);
+    const weekData = weeks.map((wk) => {
+      const leaveDates = monthLogs
+        .filter(
+          (l) =>
+            l.type === "Leave" &&
+            (() => {
+              const d = parseISO(l.date);
+              return d && d >= wk.start && d <= wk.end;
+            })()
+        )
+        .map((l) => l.date);
+      const unique = Array.from(new Set(leaveDates));
+      return {
+        start: wk.start,
+        end: wk.end,
+        leaves: unique.length,
+        dates: unique,
+      };
+    });
+
+    const W = Math.max(420, svg.clientWidth || 420);
+    const H = 140;
+    const padL = 42,
+      padR = 8,
+      padT = 10,
+      padB = 26;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const innerW = W - padL - padR,
+      innerH = H - padT - padB;
+    const maxLeaves = Math.max(1, ...weekData.map((w) => w.leaves));
+    const xStep = innerW / (weekData.length || 1);
+
+    for (let i = 0; i <= maxLeaves; i++) {
+      const y = padT + innerH - (i / maxLeaves) * innerH;
+      const line = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line"
+      );
+      line.setAttribute("x1", padL);
+      line.setAttribute("x2", W - padR);
+      line.setAttribute("y1", y);
+      line.setAttribute("y2", y);
+      line.setAttribute("stroke", "rgba(255,255,255,0.04)");
+      line.setAttribute("stroke-width", "1");
+      svg.appendChild(line);
+      if (i % Math.ceil(Math.max(1, maxLeaves / 2)) === 0) {
+        const t = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text"
+        );
+        t.setAttribute("x", padL - 8);
+        t.setAttribute("y", y + 4);
+        t.setAttribute("fill", "rgba(255,255,255,0.65)");
+        t.setAttribute("font-size", "11");
+        t.setAttribute("text-anchor", "end");
+        t.textContent = i;
+        svg.appendChild(t);
+      }
+    }
+
+    weekData.forEach((wk, idx) => {
+      const barW = Math.max(14, xStep * 0.6);
+      const cx = padL + xStep * idx + xStep / 2;
+      const barH = (wk.leaves / Math.max(1, maxLeaves)) * innerH;
+      const x = cx - barW / 2;
+      const y = padT + innerH - barH;
+      const rect = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "rect"
+      );
+      rect.setAttribute("x", x);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", barW);
+      rect.setAttribute("height", Math.max(2, barH));
+      rect.setAttribute("rx", 3);
+      rect.setAttribute("ry", 3);
+      rect.setAttribute(
+        "fill",
+        wk.leaves > 0 ? "var(--danger,#fb7185)" : "rgba(255,255,255,0.04)"
+      );
+      svg.appendChild(rect);
+
+      const lbl = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text"
+      );
+      lbl.setAttribute("x", cx);
+      lbl.setAttribute("y", H - 6);
+      lbl.setAttribute("text-anchor", "middle");
+      lbl.setAttribute("fill", "rgba(255,255,255,0.6)");
+      lbl.setAttribute("font-size", "11");
+      lbl.textContent =
+        wk.start.toLocaleString(undefined, { month: "short" }).slice(0, 3) +
+        " " +
+        wk.start.getDate();
+      svg.appendChild(lbl);
+
+      if (wk.leaves > 0) {
+        const t = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text"
+        );
+        t.setAttribute("x", cx);
+        t.setAttribute("y", y - 6);
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("fill", "rgba(255,255,255,0.95)");
+        t.setAttribute("font-size", "11");
+        t.textContent = wk.leaves;
+        svg.appendChild(t);
+      }
+    });
+
+    const lgRect = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "rect"
+    );
+    lgRect.setAttribute("x", padL);
+    lgRect.setAttribute("y", 6);
+    lgRect.setAttribute("width", 10);
+    lgRect.setAttribute("height", 6);
+    lgRect.setAttribute("fill", "var(--danger,#fb7185)");
+    svg.appendChild(lgRect);
+    const lgText = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "text"
+    );
+    lgText.setAttribute("x", padL + 14);
+    lgText.setAttribute("y", 11);
+    lgText.setAttribute("fill", "rgba(255,255,255,0.9)");
+    lgText.setAttribute("font-size", "11");
+    lgText.textContent = "Leaves (per week)";
+    svg.appendChild(lgText);
+  }
+
   // --- Catmull-Rom to cubic Bézier converter
-  // input: flat array coords = [x0,y0,x1,y1,x2,y2,...]
-  // closed: boolean, tension/alpha value (0..1) where lower -> tighter
   function catmullRom2bezier(coords, closed = false, tension = 0.5) {
-    // returns array of segments, each segment is [x1,y1,x2,y2,x3,y3] suitable for "C" command
     const points = [];
     for (let i = 0; i < coords.length; i += 2)
       points.push([coords[i], coords[i + 1]]);
     const result = [];
     const l = points.length;
-
     if (l < 2) return result;
     for (let i = 0; i < l - (closed ? 0 : 1); i++) {
       const p0 = points[(i - 1 + l) % l];
       const p1 = points[i % l];
       const p2 = points[(i + 1) % l];
       const p3 = points[(i + 2) % l];
-
-      // algorithm from Catmull-Rom to Bezier conversion
       const t = tension;
       const bp1x = p1[0] + ((p2[0] - p0[0]) * t) / 6;
       const bp1y = p1[1] + ((p2[1] - p0[1]) * t) / 6;
       const bp2x = p2[0] - ((p3[0] - p1[0]) * t) / 6;
       const bp2y = p2[1] - ((p3[1] - p1[1]) * t) / 6;
-
-      // target end point is p2
       result.push([bp1x, bp1y, bp2x, bp2y, p2[0], p2[1]]);
     }
     return result;
@@ -1160,6 +1427,13 @@
   // boot
   init();
 
-  // expose
-  window._workTracker = { loadConfig, loadLogs, saveConfig, saveLogs };
+  // expose (debug)
+  window._workTracker = {
+    loadConfig,
+    loadLogs,
+    saveConfig,
+    saveLogs,
+    weeklyLeaveSummary,
+    computeLeaveAdviceForMonth,
+  };
 })();

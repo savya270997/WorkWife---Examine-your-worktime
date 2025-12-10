@@ -184,7 +184,8 @@ p.lead {
   grid-template-columns: repeat(2, 1fr);
 }
 
-.stat {
+.stat,
+.stat-card {
   background: var(--card-2);
   padding: 14px;
   border-radius: var(--radius);
@@ -473,7 +474,7 @@ body {
 header {
   display: flex;
   gap: 14px;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-bottom: 18px;
 }
@@ -681,4 +682,26 @@ p.lead {
 :root {
   --accent: #e31b23; /* red (actual) */
   --accent-2: #60a5fa; /* blue (planned) */
+}
+
+/* Leave stats cards & charts */
+.stat-title {
+  color: var(--muted, #9aa4b2);
+  font-size: 0.9rem;
+}
+.stat-value {
+  font-weight: 800;
+  font-size: 1.05rem;
+  margin-top: 6px;
+  color: var(--text, #e6eef6);
+}
+
+#chartSVG,
+#chartLeaveSVG {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.leave-stats-row {
+  gap: 12px;
 }
