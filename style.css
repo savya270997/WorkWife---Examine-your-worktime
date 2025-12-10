@@ -191,6 +191,9 @@ p.lead {
   border-radius: var(--radius);
   box-shadow: var(--shadow-blue);
 }
+.stats-grid {
+  height: fit-content;
+}
 
 .stat h3 {
   margin: 0;
@@ -226,6 +229,7 @@ p.lead {
   border-radius: var(--radius);
   background: var(--card);
   box-shadow: var(--shadow-blue);
+  overflow: auto;
 }
 /* ---------- Existing style.css content retained above (do not remove) ---------- */
 
