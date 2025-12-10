@@ -1,13 +1,8 @@
-/* app.js — full file with updated leave-policy and advice
-   Overwrite /mnt/data/app.js with this content
-*/
-
 (() => {
   const KEY_CONFIG = "workTrackerConfig";
   const KEY_LOGS = "workTrackerDailyLogs";
   const PAGE_SIZE = 10;
 
-  // === POLICY TWEAKS (adjust these constants to change behavior) ===
   // If mandatoryDaysPerWeek >= FULL_WFO_THRESHOLD, grant FREE_LEAVES_PER_WEEK free leaves per week
   const FULL_WFO_THRESHOLD = 5; // if user has 5-day WFO, apply the cushion below
   const FREE_LEAVES_PER_WEEK_FOR_FULL_WFO = 1; // number of leaves per week that won't add to monthly makeup (adjustable)
