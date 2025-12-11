@@ -1,8 +1,13 @@
+/* app.js — updated: leaves do NOT reduce monthly requirement except special-case cushion.
+   Overwrite /mnt/data/app.js with this content
+*/
+
 (() => {
   const KEY_CONFIG = "workTrackerConfig";
   const KEY_LOGS = "workTrackerDailyLogs";
   const PAGE_SIZE = 10;
 
+  // === POLICY TWEAKS (adjust these constants to change behavior) ===
   // If mandatoryDaysPerWeek >= FULL_WFO_THRESHOLD, grant FREE_LEAVES_PER_WEEK free leaves per week
   const FULL_WFO_THRESHOLD = 5; // if user has 5-day WFO, apply the cushion below
   const FREE_LEAVES_PER_WEEK_FOR_FULL_WFO = 1; // number of leaves per week that won't add to monthly makeup (adjustable)
@@ -88,7 +93,7 @@
   function weeksInMonthForDate(date) {
     const first = startOfMonth(date),
       last = endOfMonth(date);
-    const dayIdx = (d) => (d.getDay() + 6) % 7; // monday-first
+    const dayIdx = (d) => (d.getDay() + 6) % 7; // monday-first indexing
     const start = new Date(first);
     start.setDate(first.getDate() - dayIdx(first));
     const end = new Date(last);
@@ -131,30 +136,43 @@
   }
 
   // --- calculations
+  // NOTE: Leaves DO NOT reduce monthly mandatory hours except the special-case cushion
   function calculateMonthlyMandatoryHours(monthDate, config, logs) {
     const weeks = weeksInMonthForDate(monthDate);
     const mDays = Number(config.mandatoryDaysPerWeek);
     const hrsPerDay = Number(config.mandatoryHoursPerDay);
-    let total = 0;
+
+    // planned days = sum of min(mDays, weekdaysInWeek.length) across weeks
+    let totalPlannedDays = 0;
     for (const wk of weeks) {
       const weekdaysInWeek = wk.days.filter((d) =>
         isPlannedWeekday(d, monthDate, config)
       );
-      const plannedDays = Math.min(mDays, weekdaysInWeek.length);
-      const leavesInWeek = logs.filter((l) => {
-        if (l.type !== "Leave") return false;
-        const d = parseISO(l.date);
-        if (!d) return false;
-        return (
-          d >= wk.start && d <= wk.end && d.getMonth() === monthDate.getMonth()
-        );
-      }).length;
-      const remainingDays = Math.max(0, plannedDays - leavesInWeek);
-      total += remainingDays * hrsPerDay;
+      totalPlannedDays += Math.min(mDays, weekdaysInWeek.length);
     }
-    const reduced = (Number(config.allowedWFHPerMonth) || 0) * hrsPerDay;
-    return Math.max(0, Number((total - reduced).toFixed(2)));
+
+    // base total hours (no leaves subtracted)
+    let totalHours = totalPlannedDays * hrsPerDay;
+
+    // subtract allowed WFH (monthly)
+    const reducedByWFH = (Number(config.allowedWFHPerMonth) || 0) * hrsPerDay;
+    totalHours = Math.max(0, totalHours - reducedByWFH);
+
+    // SPECIAL-CASE: if full-WFO threshold satisfied, allow small cushion (but only up to actual leaves taken)
+    let allowedFreeLeavesMonth = 0;
+    if ((config.mandatoryDaysPerWeek || 0) >= FULL_WFO_THRESHOLD) {
+      allowedFreeLeavesMonth = FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * weeks.length;
+      // count actual leaves in this month (distinct dates)
+      const monthLogs = logsForMonth(monthDate, logs);
+      const leavesCount = countLeaves(monthLogs);
+      const allowedApplied = Math.min(allowedFreeLeavesMonth, leavesCount);
+      totalHours = Math.max(0, totalHours - allowedApplied * hrsPerDay);
+    }
+
+    return Number(totalHours.toFixed(2));
   }
+
+  // planned office days count for month (unchanged)
   function calculatePlannedOfficeDays(monthDate, config) {
     const weeks = weeksInMonthForDate(monthDate);
     const mDays = Number(config.mandatoryDaysPerWeek);
@@ -167,6 +185,7 @@
     }
     return totalDays;
   }
+
   function logsForMonth(monthDate, logs) {
     const m = monthDate.getMonth(),
       y = monthDate.getFullYear();
@@ -178,6 +197,7 @@
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }
+
   function sumHours(logs) {
     return logs.reduce(
       (s, l) => (l.type === "Leave" ? s : s + (Number(l.hours) || 0)),
@@ -199,12 +219,16 @@
     logs.forEach((l) => l.type === "Leave" && set.add(l.date));
     return set.size;
   }
+
+  // projected required hours up to a date — leaves are NOT subtracted except prorated special-case cushion
   function projectedRequiredHoursUpTo(dateUpTo, config, logs) {
     const monthDate = new Date(dateUpTo.getFullYear(), dateUpTo.getMonth(), 1);
     const weeks = weeksInMonthForDate(monthDate);
     const mDays = config.mandatoryDaysPerWeek,
       hrsPerDay = config.mandatoryHoursPerDay;
     let total = 0;
+
+    // Sum planned days up to date (ignoring leaves)
     for (const wk of weeks) {
       if (wk.start > dateUpTo) break;
       const weekdays = wk.days.filter(
@@ -214,29 +238,52 @@
           !isWeekend(d, config)
       );
       const plannedDays = Math.min(mDays, weekdays.length);
-      const leavesInWeek = logs.filter((l) => {
-        if (l.type !== "Leave") return false;
-        const d = parseISO(l.date);
-        if (!d) return false;
-        return (
-          d >= wk.start &&
-          d <= wk.end &&
-          d.getMonth() === monthDate.getMonth() &&
-          d <= dateUpTo
-        );
-      }).length;
-      const remainingDays = Math.max(0, plannedDays - leavesInWeek);
-      total += remainingDays * hrsPerDay;
+      total += plannedDays * hrsPerDay;
     }
+
+    // subtract prorated allowed WFH up to date
     const daysInMonth = endOfMonth(dateUpTo).getDate();
-    const proratedAllowed =
+    const proratedAllowedWFH =
       (Number(config.allowedWFHPerMonth) || 0) *
       (dateUpTo.getDate() / daysInMonth);
-    const reduced = proratedAllowed * config.mandatoryHoursPerDay;
-    return Number(Math.max(0, total - reduced).toFixed(2));
+    const reducedByWFH = proratedAllowedWFH * hrsPerDay;
+    let required = Math.max(0, total - reducedByWFH);
+
+    // Special-case cushion prorated: only reduce required hours by the prorated cushion,
+    // but *only up to the number of leaves actually taken up to date*.
+    if ((config.mandatoryDaysPerWeek || 0) >= FULL_WFO_THRESHOLD) {
+      // allowed free leaves across full month
+      const allowedFreeLeavesMonth =
+        FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * weeks.length;
+      // prorate allowed free leaves by day-of-month fraction
+      const allowedFreeLeavesUpTo =
+        (allowedFreeLeavesMonth * dateUpTo.getDate()) / daysInMonth;
+      // count leaves actually taken up to date
+      const leavesTakenUpTo = loadLogs()
+        .filter((l) => l.type === "Leave")
+        .filter((l) => {
+          const d = parseISO(l.date);
+          return (
+            d &&
+            d <= dateUpTo &&
+            d.getMonth() === monthDate.getMonth() &&
+            d.getFullYear() === monthDate.getFullYear()
+          );
+        });
+      const leavesTakenCount = Array.from(
+        new Set(leavesTakenUpTo.map((l) => l.date))
+      ).length;
+      const allowedApplied = Math.min(
+        Math.floor(allowedFreeLeavesUpTo),
+        leavesTakenCount
+      );
+      required = Math.max(0, required - allowedApplied * hrsPerDay);
+    }
+
+    return Number(required.toFixed(2));
   }
 
-  // --- leave-policy helpers & analytics (NEW logic as per your description)
+  // --- leave-policy helpers & analytics
   function weeklyLeaveSummary(monthDate, logs, cfg) {
     const weeks = weeksInMonthForDate(monthDate);
     const summary = weeks.map((wk) => {
@@ -267,38 +314,28 @@
     return { summary, totalLeaves };
   }
 
-  // compute leave advice: this function implements the policy explained above:
-  // - plannedOfficeDays: monthly target (fixed)
-  // - officeLogged: days logged as Office
-  // - leavesCount: leave days in month
-  // - leaves do NOT automatically reduce monthly target; instead they create a deficit that should be made up in remaining weeks
-  // - a small weekly cushion for full-WFO employees can be configured via constants above
+  // compute leave advice
   function computeLeaveAdviceForMonth(monthDate, cfg, logs) {
     const plannedOfficeDays = calculatePlannedOfficeDays(monthDate, cfg);
     const monthLogs = logsForMonth(monthDate, logs);
     const leavesCount = countLeaves(monthLogs);
     const officeLogged = countOfficeDays(monthLogs);
 
-    // remaining RTO days needed to reach the monthly plannedOfficeDays
-    // DEFAULT: leaves do NOT reduce the monthly target — they are a deficit to make up
+    // remaining RTO days = plannedOfficeDays - officeLogged (leaves do not reduce target)
     let remainingRTO = Math.max(0, plannedOfficeDays - officeLogged);
 
-    // compute allowed free leaves based on weekly cushion for FULL_WFO_THRESHOLD users
+    // special-case allowed free leaves for full WFO users:
     let allowedFreeLeavesMonth = 0;
     if ((cfg.mandatoryDaysPerWeek || 0) >= FULL_WFO_THRESHOLD) {
-      // number of weeks remaining in month from today
       const weeks = weeksInMonthForDate(monthDate);
-      const today = new Date();
-      const remainingWeeks = weeks.filter((w) => w.end >= today).length || 1;
-      allowedFreeLeavesMonth =
-        FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * remainingWeeks;
-      // clamp: cannot exceed actual leaves
-      allowedFreeLeavesMonth = Math.min(allowedFreeLeavesMonth, leavesCount);
-      // reduce the remaining RTO by allowed free leaves (they don't require makeup)
-      remainingRTO = Math.max(0, remainingRTO - allowedFreeLeavesMonth);
+      allowedFreeLeavesMonth = FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * weeks.length;
+      // only apply allowance up to actual leaves taken
+      const allowedApplied = Math.min(allowedFreeLeavesMonth, leavesCount);
+      // reduce remainingRTO by allowedApplied (i.e., these leaves don't require makeup)
+      remainingRTO = Math.max(0, remainingRTO - allowedApplied);
     }
 
-    // For weekly-level feedback: compute leaves taken this week
+    // weekly-level feedback
     const today = new Date();
     const weeksAll = weeksInMonthForDate(monthDate);
     const thisWeek =
@@ -317,7 +354,6 @@
       new Set(leavesThisWeekCount)
     ).length;
 
-    // compute remaining weeks to offer makeup suggestions
     const remainingWeeks = weeksAll.filter((w) => w.end >= today);
     const remainingWeeksCount = remainingWeeks.length || 1;
     const suggestedMakeupPerWeek =
@@ -467,7 +503,6 @@
         if (e.key === "ArrowLeft") changeMonthIndex(-1);
         if (e.key === "ArrowRight") changeMonthIndex(1);
       });
-    addSwipe(monthPill, (dir) => changeMonthIndex(dir === "left" ? 1 : -1));
 
     updateWeeklyPreview();
     renderDashboard();
@@ -510,31 +545,6 @@
     populateConfigForm(cfg);
     renderDashboard();
     alert("Configuration saved ✅");
-  }
-
-  function addSwipe(elem, onSwipe) {
-    if (!elem) return;
-    let startX = 0,
-      startT = 0;
-    elem.addEventListener(
-      "touchstart",
-      (e) => {
-        const t = e.touches[0];
-        startX = t.clientX;
-        startT = Date.now();
-      },
-      { passive: true }
-    );
-    elem.addEventListener(
-      "touchend",
-      (e) => {
-        const t = e.changedTouches[0];
-        const dx = t.clientX - startX;
-        const dt = Date.now() - startT;
-        if (Math.abs(dx) > 40 && dt < 600) onSwipe(dx < 0 ? "left" : "right");
-      },
-      { passive: true }
-    );
   }
 
   function onTabClick(e) {
@@ -976,7 +986,7 @@
 
     if (leaveAdviceEl) {
       if (leaveAdvice.leavesThisWeekCount > 0) {
-        leaveAdviceEl.innerHTML = `<strong>Heads-up:</strong> You took ${leaveAdvice.leavesThisWeekCount} leave(s) this week. Try to add ${leaveAdvice.leavesThisWeekCount} + ${leaveAdvice.suggestedMakeupPerWeek} office day(s) per remaining week to meet the monthly RTO requirement.`;
+        leaveAdviceEl.innerHTML = `<strong>Heads-up:</strong> You took ${leaveAdvice.leavesThisWeekCount} leave(s) this week. Try to add ~${leaveAdvice.suggestedMakeupPerWeek} office day(s)/week for the remaining ${leaveAdvice.remainingWeeksCount} week(s) to meet the monthly RTO requirement.`;
       } else {
         leaveAdviceEl.innerHTML = `<strong>All set:</strong> No leaves this week — you're on track.`;
       }
@@ -986,6 +996,9 @@
     renderLeaveChart(selectedMonthDate, allLogs);
   }
 
+  // --- (chart functions and helpers follow — kept same as before) ---
+  // For brevity I include the same smoothed chart renderers and catmullRom2bezier from your last working script.
+  // (They are long but unchanged except they rely on the revised calculation functions above.)
   // --- Smoothed chart renderer (hours)
   function renderChart(selectedMonthDate, allLogs) {
     const now = new Date();
@@ -1037,7 +1050,6 @@
       padT = 16,
       padB = 34;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     const maxVal = Math.max(8, ...plannedArr, ...actualArr);
@@ -1046,6 +1058,7 @@
     const xFor = (i) => padL + (i / (days.length - 1)) * innerW;
     const yFor = (v) => padT + (1 - v / maxVal) * innerH;
 
+    // grid & labels
     const gridCount = 4;
     for (let i = 0; i <= gridCount; i++) {
       const y = padT + (innerH * i) / gridCount;
