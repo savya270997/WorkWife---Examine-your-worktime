@@ -2,26 +2,118 @@
    WORK TRACKER — STRANGER THINGS EDITION
    Dark 80s Horror Theme
    ============================================ */
-
+/* =========================================================
+   BASE VARIABLES — DEFAULT (Stranger Things vibe)
+=========================================================*/
 :root {
   --bg: #0a0a0a; /* Upside Down darkness */
-  --card: #111317; /* Shadowy panels */
-  --card-2: #181a20; /* Slight contrast */
-  --accent: #e50914; /* Netflix/Stranger Things red */
-  --accent-2: #b30e12; /* Darker blood red */
-  --neon-blue: #3e5cff; /* Synthwave neon */
-  --text: #ffffff; /* Bright white */
-  --muted: #bdccd4; /* Frosted muted text */
+  --card: #111317;
+  --card-2: #181a20;
+  --accent: #e50914; /* Netflix red */
+  --accent-2: #b30e12; /* darker blood red */
+  --neon-blue: #3e5cff; /* synthwave neon */
+  --text: #ffffff;
+  --muted: #bdccd4;
   --green: #2cff05;
 
-  --soft: rgba(255, 0, 0, 0.08); /* Red-tinted separators */
-  --glass: rgba(229, 9, 20, 0.12); /* Blood-glass effect */
+  --soft: rgba(255, 0, 0, 0.08);
+  --glass: rgba(229, 9, 20, 0.12);
 
   --radius: 12px;
   --shadow-red: 0 0 18px rgba(229, 9, 20, 0.45);
   --shadow-blue: 0 0 18px rgba(62, 92, 255, 0.35);
 
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+}
+
+/* =========================================================
+   THEME 1 — Stranger Things (Default)
+=========================================================*/
+[data-theme="strangerThings"] {
+  --bg: #0a0a0a;
+  --card: #111317;
+  --card-2: #181a20;
+  --accent: #e50914;
+  --accent-2: #b30e12;
+  --neon-blue: #3e5cff;
+  --text: #ffffff;
+  --muted: #bdccd4;
+  --green: #2cff05;
+
+  --soft: rgba(255, 0, 0, 0.08);
+  --glass: rgba(229, 9, 20, 0.12);
+
+  --shadow-red: 0 0 18px rgba(229, 9, 20, 0.45);
+  --shadow-blue: 0 0 18px rgba(62, 92, 255, 0.35);
+}
+
+/* =========================================================
+   THEME 2 — Hawkins Daylight (Light Mode)
+=========================================================*/
+[data-theme="hawkinsDaylight"] {
+  --bg: #f6f6f6;
+  --card: #ffffff;
+  --card-2: #f0f0f0;
+
+  --text: #111111;
+  --muted: #4d4d4d;
+
+  --accent: #d62828; /* softer daylight red */
+  --accent-2: #0077b6; /* blue sky */
+  --neon-blue: #0077e6;
+  --green: #198b05;
+
+  --soft: rgba(0, 0, 0, 0.06);
+  --glass: rgba(0, 0, 0, 0.05);
+
+  --shadow-red: 0 0 10px rgba(200, 40, 40, 0.25);
+  --shadow-blue: 0 0 10px rgba(0, 120, 255, 0.25);
+}
+
+/* =========================================================
+   THEME 3 — Upside Down (Ultra Dark Horror)
+=========================================================*/
+[data-theme="upsideDown"] {
+  --bg: #000000;
+  --card: #0a0a0a;
+  --card-2: #111111;
+
+  --text: #e6e6e6;
+  --muted: rgba(255, 255, 255, 0.55);
+
+  --accent: #ff003c; /* blood ripple */
+  --accent-2: #6441ff; /* eerie purple */
+  --neon-blue: #6441ff;
+  --green: #ff003c;
+
+  --soft: rgba(255, 0, 60, 0.12);
+  --glass: rgba(255, 0, 60, 0.1);
+
+  --shadow-red: 0 0 22px rgba(255, 0, 60, 0.6);
+  --shadow-blue: 0 0 22px rgba(100, 65, 255, 0.5);
+}
+
+/* =========================================================
+   THEME 4 — Synthwave Neon (80s Cyberpunk)
+=========================================================*/
+[data-theme="synthwaveNeon"] {
+  --bg: #1a052a;
+  --card: #24063a;
+  --card-2: #31094f;
+
+  --text: #ffe6ff;
+  --muted: rgba(255, 200, 255, 0.65);
+
+  --accent: #ff00aa; /* neon magenta */
+  --accent-2: #30f2f2; /* neon cyan */
+  --neon-blue: #30f2f2;
+  --green: #2cff05;
+
+  --soft: rgba(255, 0, 170, 0.12);
+  --glass: rgba(48, 242, 242, 0.12);
+
+  --shadow-red: 0 0 20px rgba(255, 0, 170, 0.45);
+  --shadow-blue: 0 0 20px rgba(48, 242, 242, 0.35);
 }
 
 /* GLOBAL --------------------------------------------------*/
@@ -431,26 +523,6 @@ label {
   margin-left: auto;
 }
 
-:root {
-  --bg: #0a0a0a;
-  --card: #111317;
-  --card-2: #181a20;
-  --accent: #e50914;
-  --accent-2: #b30e12;
-  --neon-blue: #3e5cff;
-  --text: #ffffff;
-  --muted: #bdccd4;
-
-  --soft: rgba(255, 0, 0, 0.08);
-  --glass: rgba(229, 9, 20, 0.12);
-
-  --radius: 12px;
-  --shadow-red: 0 0 18px rgba(229, 9, 20, 0.45);
-  --shadow-blue: 0 0 18px rgba(62, 92, 255, 0.35);
-
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-}
-
 /* Globals (kept same) */
 html,
 body {
@@ -674,12 +746,6 @@ p.lead {
   font-weight: 700;
 }
 
-/* color variables fallback for Stranger Things vibe */
-:root {
-  --accent: #e31b23; /* red (actual) */
-  --accent-2: #60a5fa; /* blue (planned) */
-}
-
 /* Leave stats cards & charts */
 .stat-title {
   color: var(--muted, #9aa4b2);
@@ -700,4 +766,12 @@ p.lead {
 }
 .leave-stats-row {
   gap: 12px;
+}
+
+.theme-toggle select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
 }

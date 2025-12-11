@@ -1,14 +1,8 @@
-/* app.js — updated: leaves do NOT reduce monthly requirement except special-case cushion.
-   Overwrite /mnt/data/app.js with this content
-*/
-
 (() => {
   const KEY_CONFIG = "workTrackerConfig";
   const KEY_LOGS = "workTrackerDailyLogs";
   const PAGE_SIZE = 10;
 
-  // === POLICY TWEAKS (adjust these constants to change behavior) ===
-  // If mandatoryDaysPerWeek >= FULL_WFO_THRESHOLD, grant FREE_LEAVES_PER_WEEK free leaves per week
   const FULL_WFO_THRESHOLD = 5; // if user has 5-day WFO, apply the cushion below
   const FREE_LEAVES_PER_WEEK_FOR_FULL_WFO = 1; // number of leaves per week that won't add to monthly makeup (adjustable)
   // =================================================================
@@ -430,6 +424,8 @@
   const leavesThisMonthEl = document.getElementById("leavesThisMonth");
   const makeupNeededEl = document.getElementById("makeupNeeded");
   const leaveAdviceEl = document.getElementById("leaveAdvice");
+  const btnExportCSV = document.getElementById("btnExportCSV");
+  const csvImportInput = document.getElementById("csvImportInput");
 
   // state
   let currentPage = 1;
@@ -1403,22 +1399,107 @@
   }
 
   // --- export / clear
-  function onExport() {
-    const logs = loadLogs(),
-      cfg = loadConfig();
-    const payload = { config: cfg, logs, exportedAt: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
+
+  // Export and Import handlers
+
+  function exportCSV() {
+    const logs = loadLogs();
+    if (!logs.length) {
+      alert("No logs to export.");
+      return;
+    }
+
+    const header = [
+      "id",
+      "date",
+      "type",
+      "hours",
+      "inTime",
+      "outTime",
+      "createdAt",
+    ].join(",");
+
+    const rows = logs.map((l) =>
+      [
+        l.id,
+        l.date,
+        l.type,
+        l.hours,
+        l.inTime || "",
+        l.outTime || "",
+        l.createdAt || "",
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
-    a.download = `worktracker_export_${new Date()
+    a.download = `worktracker_logs_${new Date()
       .toISOString()
-      .slice(0, 10)}.json`;
+      .slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    const header = lines
+      .shift()
+      .split(",")
+      .map((h) => h.replace(/"/g, ""));
+
+    return lines.map((line) => {
+      const cols = line
+        .match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
+        .map((v) => v.replace(/^"|"$/g, "").replace(/""/g, '"'));
+
+      const entry = {};
+      header.forEach((h, i) => (entry[h] = cols[i] || ""));
+      entry.hours = Number(entry.hours || 0);
+      return entry;
+    });
+  }
+
+  // IMPORT HANDLER
+  function importCSVFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const rows = parseCSV(e.target.result);
+
+        if (!rows.length) {
+          alert("CSV is empty or invalid.");
+          return;
+        }
+
+        if (!confirm("Importing will REPLACE all logs. Continue?")) return;
+
+        saveLogs(rows);
+        alert("CSV imported successfully!");
+        renderDashboard();
+        renderLogsTable();
+      } catch (err) {
+        console.error(err);
+        alert("Failed to import CSV. Check format.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  if (btnExportCSV) btnExportCSV.addEventListener("click", exportCSV);
+
+  if (csvImportInput)
+    csvImportInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) {
+        importCSVFile(e.target.files[0]);
+        e.target.value = ""; // reset so user can select again
+      }
+    });
+
   function onClear() {
     if (
       !confirm(
@@ -1432,8 +1513,33 @@
     location.reload();
   }
 
+  /* ============================
+   THEME SYSTEM
+============================ */
+  const THEME_KEY = "workTrackerTheme";
+  const themeSelect = document.getElementById("themeSelect");
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }
+
+  function loadTheme() {
+    const saved = localStorage.getItem(THEME_KEY) || "strangerThings";
+    applyTheme(saved);
+    if (themeSelect) themeSelect.value = saved;
+  }
+
+  if (themeSelect) {
+    themeSelect.addEventListener("change", () => {
+      applyTheme(themeSelect.value);
+      renderDashboard(); // re-render charts in new colors
+    });
+  }
+
   // boot
   init();
+  loadTheme();
 
   // expose (debug)
   window._workTracker = {

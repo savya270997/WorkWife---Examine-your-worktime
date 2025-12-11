@@ -19,6 +19,14 @@
             <h1>Work Wife</h1>
           </div>
         </div>
+        <div class="theme-toggle">
+          <select id="themeSelect">
+            <option value="strangerThings">Stranger Things</option>
+            <option value="hawkinsDaylight">Hawkins Daylight</option>
+            <option value="upsideDown">Upside Down</option>
+            <option value="synthwaveNeon">Synthwave Neon</option>
+          </select>
+        </div>
       </header>
 
       <nav class="tabs" role="tablist" aria-label="Main navigation">
@@ -57,13 +65,22 @@
           <input id="monthSelect" type="month" class="small hidden" />
 
           <div class="right" style="margin-left: auto; display: flex; gap: 8px">
-            <button
-              id="btnExport"
-              class="btn ghost small"
-              title="Export logs (JSON)"
-            >
-              Export JSON
-            </button>
+            <div class="export-import-row">
+              <button id="btnExportCSV" class="btn ghost small">
+                Export CSV
+              </button>
+
+              <label class="btn ghost small" for="csvImportInput"
+                >Import CSV</label
+              >
+              <input
+                type="file"
+                id="csvImportInput"
+                accept=".csv"
+                style="display: none"
+              />
+            </div>
+
             <button
               id="btnClear"
               class="btn ghost small"
