@@ -120,26 +120,30 @@
         <div class="dash-row dash-row--insights">
           <div class="stat-card">
             <div class="stat-title">Office Time</div>
-            <div class="stat-value">+6.2% <span class="trend up">▲</span></div>
+            <div class="stat-value">
+              <span id="avgHoursTrendValue">—</span>
+              <span id="avgHoursTrendIcon" class="trend">—</span>
+            </div>
             <div class="stat-sub">vs last month</div>
           </div>
 
           <div class="stat-card">
             <div class="stat-title">Login Time</div>
             <div class="stat-value">
-              -9 min <span class="trend down">▼</span>
+              <span id="avgInTrend">—</span>
             </div>
-            <div class="stat-sub">earlier than last month</div>
+            <div class="stat-sub">vs last month</div>
           </div>
 
           <div class="stat-card">
             <div class="stat-title">Logout Time</div>
             <div class="stat-value">
-              +18 min <span class="trend up">▲</span>
+              <span id="avgOutTrend">—</span>
             </div>
-            <div class="stat-sub">later than last month</div>
+            <div class="stat-sub">vs last month</div>
           </div>
         </div>
+
         <!-- ROW 3 : TRENDS -->
         <div class="dash-row dash-row--charts">
           <div class="chart-card">

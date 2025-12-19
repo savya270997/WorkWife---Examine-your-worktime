@@ -158,28 +158,6 @@
       allowedFreeLeavesMonth = FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * weeks.length;
       // count actual leaves in this month (distinct dates)
       const monthLogs = logsForMonth(monthDate, logs);
-      // ---- Month Comparisons ----
-      const comparison = getMonthComparison(selectedMonthDate, allLogs);
-
-      // Example DOM bindings (safe checks)
-      const avgInTrend = document.getElementById("avgInTrend");
-      const avgOutTrend = document.getElementById("avgOutTrend");
-      const avgHoursTrend = document.getElementById("avgHoursTrend");
-
-      if (avgInTrend) {
-        avgInTrend.textContent = comparison.avgIn.diff;
-        avgInTrend.className = `trend ${comparison.avgIn.trend}`;
-      }
-
-      if (avgOutTrend) {
-        avgOutTrend.textContent = comparison.avgOut.diff;
-        avgOutTrend.className = `trend ${comparison.avgOut.trend}`;
-      }
-
-      if (avgHoursTrend) {
-        avgHoursTrend.textContent = comparison.avgHours.diff;
-        avgHoursTrend.className = `trend ${comparison.avgHours.trend}`;
-      }
 
       const leavesCount = countLeaves(monthLogs);
       const allowedApplied = Math.min(allowedFreeLeavesMonth, leavesCount);
@@ -276,7 +254,7 @@
       const allowedFreeLeavesUpTo =
         (allowedFreeLeavesMonth * dateUpTo.getDate()) / daysInMonth;
       // count leaves actually taken up to date
-      const leavesTakenUpTo = loadLogs()
+      const leavesTakenUpTo = logs
         .filter((l) => l.type === "Leave")
         .filter((l) => {
           const d = parseISO(l.date);
@@ -743,8 +721,12 @@
 
   function changeMonthIndex(delta) {
     const minIndex = 0,
-      maxIndex = 2;
-    const newIndex = Math.max(minIndex, Math.min(maxIndex, monthIndex + delta));
+      MAX_MONTHS_BACK = 2;
+
+    const newIndex = Math.max(
+      minIndex,
+      Math.min(MAX_MONTHS_BACK, monthIndex + delta)
+    );
     if (newIndex === monthIndex) return;
     monthIndex = newIndex;
     updateMonthPill();
@@ -920,6 +902,50 @@
     const monthlyHoursActual = sumHours(monthLogs);
     const monthlyLeaves = countLeaves(monthLogs);
     const monthlyOfficeCount = countOfficeDays(monthLogs);
+    // ----- INSIGHTS (Month-over-Month) -----
+    const insights = calculateMonthlyInsights(selectedMonthDate, allLogs);
+
+    const avgHoursTrendValue = document.getElementById("avgHoursTrendValue");
+    const avgHoursTrendIcon = document.getElementById("avgHoursTrendIcon");
+    const avgInTrend = document.getElementById("avgInTrend");
+    const avgOutTrend = document.getElementById("avgOutTrend");
+
+    if (!insights) {
+      if (avgHoursTrendValue) avgHoursTrendValue.textContent = "—";
+      if (avgHoursTrendIcon) avgHoursTrendIcon.textContent = "";
+      if (avgInTrend) avgInTrend.textContent = "—";
+      if (avgOutTrend) avgOutTrend.textContent = "—";
+    } else {
+      // Office hours %
+      if (avgHoursTrendValue && avgHoursTrendIcon) {
+        const up = insights.hoursPct >= 0;
+        avgHoursTrendValue.textContent = `${up ? "+" : ""}${
+          insights.hoursPct
+        }%`;
+        avgHoursTrendIcon.textContent = up ? "▲" : "▼";
+        avgHoursTrendIcon.className = `trend ${up ? "up" : "down"}`;
+      }
+
+      // Login time
+      if (avgInTrend) {
+        avgInTrend.textContent =
+          insights.inDiff == null
+            ? "—"
+            : `${formatMinutesDiff(insights.inDiff)} ${
+                insights.inDiff < 0 ? "▼" : "▲"
+              }`;
+      }
+
+      // Logout time
+      if (avgOutTrend) {
+        avgOutTrend.textContent =
+          insights.outDiff == null
+            ? "—"
+            : `${formatMinutesDiff(insights.outDiff)} ${
+                insights.outDiff > 0 ? "▲" : "▼"
+              }`;
+      }
+    }
 
     const monthlyMandatory = calculateMonthlyMandatoryHours(
       selectedMonthDate,
@@ -935,8 +961,9 @@
       wfhUsed.textContent = `Implicit hybrid days: not required to log • Extra allowed WFH this month: ${cfg.allowedWFHPerMonth}`;
     const officeRemainingCount = Math.max(
       0,
-      plannedOfficeDays - monthlyLeaves - monthlyOfficeCount
+      plannedOfficeDays - monthlyOfficeCount
     );
+
     if (officeRemaining)
       officeRemaining.textContent = `${officeRemainingCount} day(s) remaining`;
 
@@ -1631,72 +1658,50 @@
     };
   }
 
-  function getMonthComparison(monthDate, allLogs) {
-    const currentMonth = monthDate;
-    const prevMonth = new Date(
-      monthDate.getFullYear(),
-      monthDate.getMonth() - 1,
-      1
-    );
+  function getPreviousMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth() - 1, 1);
+  }
 
-    const currAvg = calculateOfficeAverages(currentMonth, allLogs);
-    const prevAvg = calculateOfficeAverages(prevMonth, allLogs);
+  function formatMinutesDiff(mins) {
+    if (mins == null) return "—";
+    const abs = Math.abs(mins);
+    if (abs >= 60) {
+      const h = Math.floor(abs / 60);
+      const m = abs % 60;
+      return `${mins > 0 ? "+" : "-"}${h}h${m ? " " + m + "m" : ""}`;
+    }
+    return `${mins > 0 ? "+" : "-"}${abs} min`;
+  }
+  function calculateMonthlyInsights(currentMonth, logs) {
+    const prevMonth = getPreviousMonth(currentMonth);
 
-    const currOfficeDays = countOfficeDays(logsForMonth(currentMonth, allLogs));
-    const prevOfficeDays = countOfficeDays(logsForMonth(prevMonth, allLogs));
+    const currAvg = calculateOfficeAverages(currentMonth, logs);
+    const prevAvg = calculateOfficeAverages(prevMonth, logs);
+
+    if (!prevAvg || prevAvg.avgHours == null || currAvg.avgHours == null) {
+      return null;
+    }
+
+    // Avg hours % diff
+    const hoursDiffPct =
+      ((currAvg.avgHours - prevAvg.avgHours) / prevAvg.avgHours) * 100;
+
+    // In / Out diffs in minutes
+    const inDiff =
+      currAvg.avgIn != null && prevAvg.avgIn != null
+        ? currAvg.avgIn - prevAvg.avgIn
+        : null;
+
+    const outDiff =
+      currAvg.avgOut != null && prevAvg.avgOut != null
+        ? currAvg.avgOut - prevAvg.avgOut
+        : null;
 
     return {
-      avgIn: {
-        value: currAvg.avgIn,
-        diff: diffMinutesLabel(currAvg.avgIn, prevAvg.avgIn),
-        trend: trendDirection(currAvg.avgIn, prevAvg.avgIn),
-      },
-      avgOut: {
-        value: currAvg.avgOut,
-        diff: diffMinutesLabel(currAvg.avgOut, prevAvg.avgOut),
-        trend: trendDirection(currAvg.avgOut, prevAvg.avgOut),
-      },
-      avgHours: {
-        value: currAvg.avgHours,
-        diff: diffHoursLabel(currAvg.avgHours, prevAvg.avgHours),
-        trend: trendDirection(currAvg.avgHours, prevAvg.avgHours),
-      },
-      officeDays: {
-        value: currOfficeDays,
-        diff:
-          currOfficeDays === prevOfficeDays
-            ? "Same"
-            : currOfficeDays > prevOfficeDays
-            ? `+${currOfficeDays - prevOfficeDays} days`
-            : `${currOfficeDays - prevOfficeDays} days`,
-        trend: trendDirection(currOfficeDays, prevOfficeDays),
-      },
+      hoursPct: Number(hoursDiffPct.toFixed(1)),
+      inDiff,
+      outDiff,
     };
-  }
-
-  // =======================
-  // Comparison helpers
-  // =======================
-
-  function diffMinutesLabel(curr, prev) {
-    if (curr == null || prev == null) return "—";
-    const diff = Math.round(curr - prev);
-    if (diff === 0) return "Same";
-    return diff > 0 ? `+${diff} min` : `${diff} min`;
-  }
-
-  function diffHoursLabel(curr, prev) {
-    if (curr == null || prev == null) return "—";
-    const diff = Number((curr - prev).toFixed(2));
-    if (diff === 0) return "Same";
-    return diff > 0 ? `+${diff} hr` : `${diff} hr`;
-  }
-
-  function trendDirection(curr, prev) {
-    if (curr == null || prev == null) return "none";
-    if (curr > prev) return "up";
-    if (curr < prev) return "down";
-    return "same";
   }
 
   // boot

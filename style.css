@@ -902,3 +902,9 @@ p.lead {
   display: flex;
   gap: 8px;
 }
+.trend.up {
+  color: var(--green);
+}
+.trend.down {
+  color: var(--accent);
+}
