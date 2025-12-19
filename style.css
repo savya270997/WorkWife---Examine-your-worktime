@@ -307,7 +307,7 @@ p.lead {
 
 .chart-svg {
   width: 100%;
-  height: 180px;
+  height: 180px !important;
 }
 
 /* LOG TABLE --------------------------------------------------*/
