@@ -158,6 +158,29 @@
       allowedFreeLeavesMonth = FREE_LEAVES_PER_WEEK_FOR_FULL_WFO * weeks.length;
       // count actual leaves in this month (distinct dates)
       const monthLogs = logsForMonth(monthDate, logs);
+      // ---- Month Comparisons ----
+      const comparison = getMonthComparison(selectedMonthDate, allLogs);
+
+      // Example DOM bindings (safe checks)
+      const avgInTrend = document.getElementById("avgInTrend");
+      const avgOutTrend = document.getElementById("avgOutTrend");
+      const avgHoursTrend = document.getElementById("avgHoursTrend");
+
+      if (avgInTrend) {
+        avgInTrend.textContent = comparison.avgIn.diff;
+        avgInTrend.className = `trend ${comparison.avgIn.trend}`;
+      }
+
+      if (avgOutTrend) {
+        avgOutTrend.textContent = comparison.avgOut.diff;
+        avgOutTrend.className = `trend ${comparison.avgOut.trend}`;
+      }
+
+      if (avgHoursTrend) {
+        avgHoursTrend.textContent = comparison.avgHours.diff;
+        avgHoursTrend.className = `trend ${comparison.avgHours.trend}`;
+      }
+
       const leavesCount = countLeaves(monthLogs);
       const allowedApplied = Math.min(allowedFreeLeavesMonth, leavesCount);
       totalHours = Math.max(0, totalHours - allowedApplied * hrsPerDay);
@@ -987,6 +1010,22 @@
         leaveAdviceEl.innerHTML = `<strong>All set:</strong> No leaves this week — you're on track.`;
       }
     }
+    // =============================
+    // Row 1 — Office Averages
+    // =============================
+    const avg = calculateOfficeAverages(selectedMonthDate, allLogs);
+
+    const avgInEl = document.getElementById("avgInTime");
+    const avgOutEl = document.getElementById("avgOutTime");
+    const avgHoursEl = document.getElementById("avgOfficeHours");
+
+    if (avgInEl) avgInEl.textContent = minutesToTimeLabel(avg.avgIn);
+
+    if (avgOutEl) avgOutEl.textContent = minutesToTimeLabel(avg.avgOut);
+
+    if (avgHoursEl)
+      avgHoursEl.textContent =
+        avg.avgHours != null ? `${avg.avgHours.toFixed(2)} hrs` : "—";
 
     renderChart(selectedMonthDate, allLogs);
     renderLeaveChart(selectedMonthDate, allLogs);
@@ -1535,6 +1574,129 @@
       applyTheme(themeSelect.value);
       renderDashboard(); // re-render charts in new colors
     });
+  }
+  //for cards
+  function timeToMinutes(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d)) return null;
+    return d.getHours() * 60 + d.getMinutes();
+  }
+  function minutesToTimeLabel(mins) {
+    if (mins == null) return "—";
+    const h24 = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    const ampm = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 || 12;
+    return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+  }
+  function calculateOfficeAverages(monthDate, logs) {
+    const monthLogs = logsForMonth(monthDate, logs).filter(
+      (l) => l.type === "Office" && l.inTime && l.outTime
+    );
+
+    if (!monthLogs.length) {
+      return {
+        avgIn: null,
+        avgOut: null,
+        avgHours: null,
+      };
+    }
+
+    let inSum = 0;
+    let outSum = 0;
+    let hoursSum = 0;
+    let count = 0;
+
+    monthLogs.forEach((l) => {
+      const inMin = timeToMinutes(l.inTime);
+      const outMin = timeToMinutes(l.outTime);
+
+      if (inMin != null && outMin != null && outMin > inMin) {
+        inSum += inMin;
+        outSum += outMin;
+        hoursSum += (outMin - inMin) / 60;
+        count++;
+      }
+    });
+
+    if (!count) {
+      return { avgIn: null, avgOut: null, avgHours: null };
+    }
+
+    return {
+      avgIn: inSum / count,
+      avgOut: outSum / count,
+      avgHours: hoursSum / count,
+    };
+  }
+
+  function getMonthComparison(monthDate, allLogs) {
+    const currentMonth = monthDate;
+    const prevMonth = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth() - 1,
+      1
+    );
+
+    const currAvg = calculateOfficeAverages(currentMonth, allLogs);
+    const prevAvg = calculateOfficeAverages(prevMonth, allLogs);
+
+    const currOfficeDays = countOfficeDays(logsForMonth(currentMonth, allLogs));
+    const prevOfficeDays = countOfficeDays(logsForMonth(prevMonth, allLogs));
+
+    return {
+      avgIn: {
+        value: currAvg.avgIn,
+        diff: diffMinutesLabel(currAvg.avgIn, prevAvg.avgIn),
+        trend: trendDirection(currAvg.avgIn, prevAvg.avgIn),
+      },
+      avgOut: {
+        value: currAvg.avgOut,
+        diff: diffMinutesLabel(currAvg.avgOut, prevAvg.avgOut),
+        trend: trendDirection(currAvg.avgOut, prevAvg.avgOut),
+      },
+      avgHours: {
+        value: currAvg.avgHours,
+        diff: diffHoursLabel(currAvg.avgHours, prevAvg.avgHours),
+        trend: trendDirection(currAvg.avgHours, prevAvg.avgHours),
+      },
+      officeDays: {
+        value: currOfficeDays,
+        diff:
+          currOfficeDays === prevOfficeDays
+            ? "Same"
+            : currOfficeDays > prevOfficeDays
+            ? `+${currOfficeDays - prevOfficeDays} days`
+            : `${currOfficeDays - prevOfficeDays} days`,
+        trend: trendDirection(currOfficeDays, prevOfficeDays),
+      },
+    };
+  }
+
+  // =======================
+  // Comparison helpers
+  // =======================
+
+  function diffMinutesLabel(curr, prev) {
+    if (curr == null || prev == null) return "—";
+    const diff = Math.round(curr - prev);
+    if (diff === 0) return "Same";
+    return diff > 0 ? `+${diff} min` : `${diff} min`;
+  }
+
+  function diffHoursLabel(curr, prev) {
+    if (curr == null || prev == null) return "—";
+    const diff = Number((curr - prev).toFixed(2));
+    if (diff === 0) return "Same";
+    return diff > 0 ? `+${diff} hr` : `${diff} hr`;
+  }
+
+  function trendDirection(curr, prev) {
+    if (curr == null || prev == null) return "none";
+    if (curr > prev) return "up";
+    if (curr < prev) return "down";
+    return "same";
   }
 
   // boot

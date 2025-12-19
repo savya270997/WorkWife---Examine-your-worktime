@@ -248,7 +248,7 @@ p.lead {
   background: #1e1e1e;
   border-radius: 10px;
   overflow: hidden;
-  margin-top: 12px;
+  margin: 12px 0px;
 }
 
 .progress-bar {
@@ -258,7 +258,13 @@ p.lead {
   box-shadow: var(--shadow-red);
   transition: width 650ms ease;
 }
+.progress-percent {
+  text-align: right;
+}
 
+.view-pill {
+  margin-bottom: 6px;
+}
 /* KPI CARDS --------------------------------------------------*/
 
 .stats-grid {
@@ -774,4 +780,125 @@ p.lead {
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
+}
+/* =========================
+   DASHBOARD NEW LAYOUT
+========================= */
+
+.dash-row {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+/* Row 1: Primary metrics */
+.dash-row--primary {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Row 2: Insights */
+.dash-row--insights {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Row 3: Charts */
+.dash-row--charts {
+  grid-template-columns: 2fr 1fr;
+}
+
+/* Mobile */
+@media (max-width: 900px) {
+  .dash-row--primary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dash-row--insights {
+    grid-template-columns: 1fr;
+  }
+  .dash-row--charts {
+    grid-template-columns: 1fr;
+  }
+}
+.stat-card {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.01)
+  );
+  padding: 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-blue);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 92px;
+}
+
+.stat-card.accent {
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow-red);
+}
+
+.stat-title {
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 900;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.stat-sub {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.trend {
+  font-size: 0.85rem;
+  margin-left: 4px;
+}
+
+.trend.up {
+  color: var(--green);
+}
+
+.trend.down {
+  color: var(--accent);
+}
+.chart-card {
+  background: var(--card-2);
+  padding: 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-red);
+}
+
+.chart-header {
+  margin-bottom: 10px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.logs-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.logs-header .muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.pager-actions {
+  display: flex;
+  gap: 8px;
 }
